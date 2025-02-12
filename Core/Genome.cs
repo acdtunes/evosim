@@ -13,16 +13,9 @@ public class Genome
 
     private static readonly Dictionary<string, (float min, float max)> GeneRanges = new()
     {
-        { "MaxSpeed", (30f, 100f) },
         { "EnergyStorage", (100f, 200f) },
         { "MetabolicRate", (0.1f, 2.0f) },
-        { "MaturityAge", (50f, 100f) },
-        { "ReproductiveCost", (0.01f, 0.1f) },
-        { "Lifespan", (500f, 1000f) },
-        { "ForagingRange", (20f, 150f) },
-        { "MovementEfficiency", (0.8f, 1.2f) },
-        { "MaxAngularThrust", (2f, 10f) },
-        { "MaxThrust", (50f, 200f) }
+        { "ForagingRange", (50f, 100f) }
     };
 
     private readonly float _mutationRate;
@@ -33,56 +26,30 @@ public class Genome
         _random = random;
         _mutationRate = mutationRate;
 
-        MaxSpeed = RandomRange("MaxSpeed");
-        EnergyStorage = RandomRange("EnergyStorage");
         MetabolicRate = RandomRange("MetabolicRate");
-        MaturityAge = RandomRange("MaturityAge");
-        Lifespan = RandomRange("Lifespan");
-        ForagingRange = RandomRange("ForagingRange");
-        ReproductiveCost = RandomRange("ReproductiveCost");
-        MovementEfficiency = RandomRange("MovementEfficiency");
-        MaxAngularThrust = RandomRange("MaxAngularThrust");
-        MaxThrust = RandomRange("MaxThrust");
-
+        EnergyStorage = RandomRange("EnergyStorage");
         BrainWeights = new float[TotalBrainWeights];
-        // Scale weights by 0.1 to avoid saturation in the neural network
+        
         for (var i = 0; i < BrainWeights.Length; i++) 
             BrainWeights[i] = (float)((_random.NextDouble() * 2 - 1) * 0.1);
     }
-
-    private Genome(float maxSpeed, float energyStorage, float metabolicRate, float maturityAge, float reproductiveCost,
-        float lifespan, float foragingRange, float mutationRate, float movementEfficiency, float maxThrust, float maxAngularThrust, Random random, float[] brainWeights)
+    
+    private Genome(float energyStorage, float foragingRange, float mutationRate, Random random, float[] brainWeights)
     {
         _mutationRate = mutationRate;
         _random = random;
-        MaxSpeed = maxSpeed;
         EnergyStorage = energyStorage;
-        MetabolicRate = metabolicRate;
-        MaturityAge = maturityAge;
-        ReproductiveCost = reproductiveCost;
-        Lifespan = lifespan;
-        ForagingRange = foragingRange;
-        MovementEfficiency = movementEfficiency;
-        MaxThrust = maxThrust;
-        MaxAngularThrust = maxAngularThrust;
         BrainWeights = brainWeights;
+        ForagingRange = foragingRange;
     }
 
-    public float MaxSpeed { get; }
     public float EnergyStorage { get; }
-    public float MetabolicRate { get; }
-    public float MaturityAge { get; }
-    public float ReproductiveCost { get; set; }
-    public float Lifespan { get; }
-    public float ForagingRange { get; }
     
-    public float MaxThrust { get; set; }
-    
-    public float MaxAngularThrust { get; set; }
-    
-    public float MovementEfficiency { get; }
-
     public float[] BrainWeights { get; }
+    
+    public float MetabolicRate { get; set; }
+    public float ForagingRange { get; set; }
+
 
     private float RandomRange(string gene)
     {
@@ -100,20 +67,14 @@ public class Genome
 
     public Genome Clone()
     {
-        var brainWeightsCopy = (float[])BrainWeights.Clone();
-        return new Genome(MaxSpeed, EnergyStorage, MetabolicRate, MaturityAge, ReproductiveCost, Lifespan, ForagingRange, 
-            _mutationRate, MovementEfficiency, MaxThrust, MaxAngularThrust, _random, brainWeightsCopy);
+        return new Genome(EnergyStorage, ForagingRange, _mutationRate, _random, (float[])BrainWeights.Clone());
     }
 
     public Genome Mutate()
     {
-        var newMaxSpeed = MutateGene(MaxSpeed, "MaxSpeed");
         var newEnergyStorage = MutateGene(EnergyStorage, "EnergyStorage");
         var newMetabolicRate = MutateGene(MetabolicRate, "MetabolicRate");
-        var newMaturityAge = MutateGene(MaturityAge, "MaturityAge");
-        var newLifespan = MutateGene(Lifespan, "Lifespan");
         var newForagingRange = MutateGene(ForagingRange, "ForagingRange");
-        var newReproductiveCost = MutateGene(ReproductiveCost, "ReproductiveCost");
 
         var newBrainWeights = (float[])BrainWeights.Clone();
         for (var i = 0; i < newBrainWeights.Length; i++)
@@ -124,8 +85,7 @@ public class Genome
                 newBrainWeights[i] = MathHelper.Clamp(newBrainWeights[i], -1, 1);
             }
 
-        return new Genome(newMaxSpeed, newEnergyStorage, newMetabolicRate, newMaturityAge, newReproductiveCost, newLifespan, 
-            newForagingRange, _mutationRate, MovementEfficiency, MaxThrust, MaxAngularThrust, _random, newBrainWeights);
+        return new Genome(newEnergyStorage, newForagingRange, newMetabolicRate, _random, newBrainWeights);
     }
 
     private float MutateGene(float geneValue, string gene)
