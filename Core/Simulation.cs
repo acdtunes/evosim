@@ -30,12 +30,10 @@ namespace EvolutionSim.Core
             _deadCreatures = new Dictionary<int, Creature>();
             _deadPlants = new Dictionary<int, Plant>();
 
-            // Create a BrainClient to communicate with the Python RL server.
             _client = new BrainClient("localhost", 5000);
 
             PopulateCreatures();
             PopulatePlants();
-            // In the individual-brains design, we no longer initialize brains in batch.
         }
 
         private void PopulatePlants()
@@ -106,6 +104,7 @@ namespace EvolutionSim.Core
         {
             dt *= Parameters.SimulationSpeed;
 
+            // Request updated jet forces asynchronously from the RL client.
             EvaluateForces();
 
             Dictionary<int, JetForces> forcesBatch;
@@ -116,7 +115,7 @@ namespace EvolutionSim.Core
 
             List<TransitionData> trainingTransitions = new List<TransitionData>();
 
-            // For each creature, update its state and build a training transition.
+            // Update every creature and build its training transition.
             foreach (var creature in Creatures.Values.ToList())
             {
                 var previousSensors = creature.PreviousSensors;
@@ -125,47 +124,11 @@ namespace EvolutionSim.Core
                 var forces = forcesBatch.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0, 0, 0, 0);
                 creature.Update(dt, forces);
 
-                var currentSensors = creature.LastSensors;
-             
-                float energySpent = creature.CalculateJetEnergyCost(dt);
-                float hunger = 1 - MathHelper.Clamp(creature.Energy / creature.Genome.EnergyStorage, 0, 1);
-                float penaltyCoefficient = 1000.0f;
-                float penalty = (1 - hunger) * penaltyCoefficient * energySpent;
-
-                float angularPenaltyCoefficient = 800f; 
-                float angularPenalty = (creature.AngularVelocity * creature.AngularVelocity) * angularPenaltyCoefficient * dt;
-
-                float baseReward = (creature.Energy - previousEnergy) - penalty - angularPenalty;
-    
-                float parasiteRewardMultiplier = 20f;
-                float reward = baseReward + parasiteRewardMultiplier * creature.ParasiteEnergyDelta;
-
-                var transition = new TransitionData
-                {
-                    Id = creature.Id,
-                    State = SensorsToArray(previousSensors),
-                    Action = JetForcesToArray(creature.LastJetForces),
-                    Reward = reward,
-                    NextState = SensorsToArray(currentSensors),
-                    Done = false
-                };
-                trainingTransitions.Add(transition);
-
-                creature.PreviousSensors = currentSensors;
-                creature.PreviousEnergy = creature.Energy;
+                trainingTransitions.Add(BuildTransition(creature, dt, previousSensors, previousEnergy));
             }
 
-            foreach (var plant in Plants.Values.ToList())
-            {
-                plant.Update(dt);
-            }
-            foreach (var plant in _deadPlants.Values)
-                Plants.Remove(plant.Id);
-            _deadPlants.Clear();
-
-            foreach (var creature in _deadCreatures.Values)
-                Creatures.Remove(creature.Id);
-            _deadCreatures.Clear();
+            UpdatePlants(dt);
+            CleanupDeadEntities();
 
             Task.Run(async () =>
             {
@@ -276,6 +239,56 @@ namespace EvolutionSim.Core
                 j.BottomRight,
                 j.BottomLeft
             };
+        }
+
+        private TransitionData BuildTransition(Creature creature, float dt, Sensors previousSensors, float previousEnergy)
+        {
+            var currentSensors = creature.LastSensors;
+            float energySpent = creature.CalculateJetEnergyCost(dt);
+            float hunger = 1 - MathHelper.Clamp(creature.Energy / creature.Genome.EnergyStorage, 0, 1);
+            float penaltyCoefficient = 1000f;
+            float penalty = (1 - hunger) * penaltyCoefficient * energySpent;
+            float angularPenaltyCoefficient = 800f;
+            float angularPenalty = (creature.AngularVelocity * creature.AngularVelocity) * angularPenaltyCoefficient * dt;
+
+            float baseReward = (creature.Energy - previousEnergy) - penalty - angularPenalty;
+            float parasiteRewardMultiplier = 20f;
+            float reward = baseReward + parasiteRewardMultiplier * creature.ParasiteEnergyDelta;
+
+            var transition = new TransitionData
+            {
+                Id = creature.Id,
+                State = SensorsToArray(previousSensors),
+                Action = JetForcesToArray(creature.LastJetForces),
+                Reward = reward,
+                NextState = SensorsToArray(currentSensors),
+                Done = false
+            };
+
+            // Update creature's previous state for next transition.
+            creature.PreviousSensors = currentSensors;
+            creature.PreviousEnergy = creature.Energy;
+
+            return transition;
+        }
+
+        private void UpdatePlants(float dt)
+        {
+            foreach (var plant in Plants.Values.ToList())
+            {
+                plant.Update(dt);
+            }
+        }
+
+        private void CleanupDeadEntities()
+        {
+            foreach (var plant in _deadPlants.Values)
+                Plants.Remove(plant.Id);
+            _deadPlants.Clear();
+
+            foreach (var creature in _deadCreatures.Values)
+                Creatures.Remove(creature.Id);
+            _deadCreatures.Clear();
         }
     }
 }

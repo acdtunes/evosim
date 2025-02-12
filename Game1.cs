@@ -62,29 +62,12 @@ public class Game1 : Game
         if (Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
 
-        // Handle mouse click to select a creature.
-        var currentMouseState = Mouse.GetState();
-        if (currentMouseState.LeftButton == ButtonState.Pressed &&
-            _previousMouseState.LeftButton == ButtonState.Released)
-        {
-            // Get the mouse click position.
-            var mousePos = new Vector2(currentMouseState.X, currentMouseState.Y);
-
-            // Find a creature whose position is close to the click (within 10 pixels).
-            foreach (var creature in _simulation.Creatures.Values)
-                if (Vector2.Distance(mousePos, creature.Position) < 10f)
-                {
-                    _selectedCreature = creature;
-                    break;
-                }
-        }
-
-        _previousMouseState = currentMouseState;
+        HandleMouseClick();
 
         var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _simulation.Update(dt);
 
-        // NEW: Update the cluster regeneration timer.
+        // Update the cluster regeneration timer.
         _clusterRegenTimer += dt;
         if (_clusterRegenTimer >= CLUSTER_REGEN_INTERVAL &&
             _simulation.Plants.Count < _parameters.Population.GlobalMaxPlantCount)
@@ -94,6 +77,26 @@ public class Game1 : Game
         }
 
         base.Update(gameTime);
+    }
+
+    // NEW: Extracted method to handle mouse clicks for creature selection.
+    private void HandleMouseClick()
+    {
+        var currentMouseState = Mouse.GetState();
+        if (currentMouseState.LeftButton == ButtonState.Pressed &&
+            _previousMouseState.LeftButton == ButtonState.Released)
+        {
+            var mousePos = new Vector2(currentMouseState.X, currentMouseState.Y);
+            foreach (var creature in _simulation.Creatures.Values)
+            {
+                if (Vector2.Distance(mousePos, creature.Position) < 10f)
+                {
+                    _selectedCreature = creature;
+                    break;
+                }
+            }
+        }
+        _previousMouseState = currentMouseState;
     }
 
     protected override void Draw(GameTime gameTime)
@@ -109,40 +112,7 @@ public class Game1 : Game
             switch (creature.BodyShape)
             {
                 case BodyShape.Rod:
-                {
-                    var W = creature.Size / 3f;
-                    var H = creature.Size;
-                    var radius = W / 2f;
-
-                    // Setup transformation: rotate by creature.Heading and translate to creature.Position.
-                    var transform = Matrix.CreateRotationZ(creature.Heading + MathHelper.PiOver2) *
-                                    Matrix.CreateTranslation(creature.Position.X, creature.Position.Y, 0);
-
-                    _spriteBatch.End();
-                    _spriteBatch.Begin(transformMatrix: transform);
-
-                    // Draw the central rectangle (spanning the middle of the capsule).
-                    // Its horizontal span is the full width and its vertical span is H - W.
-                    _spriteBatch.FillRectangle(
-                        new RectangleF(-W / 2f, -H / 2f + radius, W, H - W),
-                        color);
-
-                    // Compute scaling for the filled circle texture so that its drawn diameter equals W.
-                    var circleScale = W / _filledCircleTexture.Width;
-                    var circleOrigin = new Vector2(_filledCircleTexture.Width / 2f, _filledCircleTexture.Height / 2f);
-
-                    // Draw the top cap.
-                    _spriteBatch.Draw(_filledCircleTexture,
-                        new Vector2(0, -H / 2f + radius),
-                        null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
-                    // Draw the bottom cap.
-                    _spriteBatch.Draw(_filledCircleTexture,
-                        new Vector2(0, H / 2f - radius),
-                        null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
-
-                    _spriteBatch.End();
-                    _spriteBatch.Begin();
-                }
+                    DrawRodCreature(creature, color);
                     break;
                 case BodyShape.Cylinder:
                 case BodyShape.Sphere:
@@ -182,6 +152,39 @@ public class Game1 : Game
         }
 
         base.Draw(gameTime);
+    }
+
+    // NEW: Helper method to draw "rod"–shaped creatures.
+    private void DrawRodCreature(Creature creature, Color color)
+    {
+        var W = creature.Size / 3f;
+        var H = creature.Size;
+        var radius = W / 2f;
+        var transform = Matrix.CreateRotationZ(creature.Heading + MathHelper.PiOver2) *
+                        Matrix.CreateTranslation(creature.Position.X, creature.Position.Y, 0);
+
+        _spriteBatch.End();
+        _spriteBatch.Begin(transformMatrix: transform);
+
+        // Draw the central rectangle (the capsule body).
+        _spriteBatch.FillRectangle(
+            new RectangleF(-W / 2f, -H / 2f + radius, W, H - W),
+            color);
+
+        var circleScale = W / _filledCircleTexture.Width;
+        var circleOrigin = new Vector2(_filledCircleTexture.Width / 2f, _filledCircleTexture.Height / 2f);
+
+        // Draw the top cap.
+        _spriteBatch.Draw(_filledCircleTexture,
+            new Vector2(0, -H / 2f + radius),
+            null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
+        // Draw the bottom cap.
+        _spriteBatch.Draw(_filledCircleTexture,
+            new Vector2(0, H / 2f - radius),
+            null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
+
+        _spriteBatch.End();
+        _spriteBatch.Begin();
     }
 
     private Texture2D CreateCircleTexture(int radius, Color color)
