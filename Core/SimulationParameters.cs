@@ -34,6 +34,7 @@ public class PopulationParameters
     public int MaxPlantsPerCluster { get; set; }
     public int GlobalMaxPlantCount { get; set; }
     public float InitialPlantClusterRadius { get; set; }
+    public int InitialParasiteCount { get; set; }
 }
 
 public class CreatureParameters
@@ -58,8 +59,9 @@ public class RenderParameters
 
 public class PhysicsParameters
 {
-    public float ForceScaling { get; set; }
     public float LinearDragCoefficient { get; set; }
-    public float AngularDragCoefficient { get; set; }
+    public float TorqueDragCoefficient { get; set; }
     public float JetCooldown { get; set; }
+    public float LinearForceScaling { get; set; }
+    public float AngularForceScaling { get; set; }
 }

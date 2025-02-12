@@ -7,7 +7,7 @@ public class PhysicalBody
 {
     private readonly float _angularDragCoefficient;
 
-    private readonly float _forceScaling;
+    private readonly float _linearForceScaling;
     private readonly float _jetCooldown;
     private readonly float _linearDragCoefficient;
     private readonly Random _random;
@@ -23,6 +23,7 @@ public class PhysicalBody
     private float _inputTorque;
     private float _topLeftJetCooldownTimer;
     private float _topRightJetCooldownTimer;
+    private readonly float _torqueForceScaling;
 
     public PhysicalBody(Vector2 position, float heading, float mass, float size, BodyShape shape, Random random,
         SimulationParameters parameters)
@@ -36,9 +37,10 @@ public class PhysicalBody
         WorldWidth = parameters.World.WorldWidth;
         WorldHeight = parameters.World.WorldHeight;
 
-        _forceScaling = parameters.Physics.ForceScaling;
+        _linearForceScaling = parameters.Physics.LinearForceScaling;
+        _torqueForceScaling = parameters.Physics.AngularForceScaling;
         _linearDragCoefficient = parameters.Physics.LinearDragCoefficient;
-        _angularDragCoefficient = parameters.Physics.AngularDragCoefficient;
+        _angularDragCoefficient = parameters.Physics.TorqueDragCoefficient;
         _jetCooldown = parameters.Physics.JetCooldown;
 
         _frontJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
@@ -88,20 +90,20 @@ public class PhysicalBody
         const float minActivation = 0.01f;
 
         var backThrust = forces.Back >= minActivation && _backJetCooldownTimer <= 0f
-            ? forces.Back * _forceScaling
+            ? forces.Back * _linearForceScaling
             : 0f;
         if (backThrust > 0f)
             _backJetCooldownTimer = _jetCooldown;
 
         var frontThrust = forces.Front >= minActivation && _frontJetCooldownTimer <= 0f
-            ? forces.Front * _forceScaling
+            ? forces.Front * _linearForceScaling
             : 0f;
         if (frontThrust > 0f)
             _frontJetCooldownTimer = _jetCooldown;
 
         var netThrust = backThrust - frontThrust;
 
-        var torqueScaling = _forceScaling / 2;
+        var torqueScaling = _torqueForceScaling;
         var topRightForce = forces.TopRight >= minActivation && _topRightJetCooldownTimer <= 0f
             ? forces.TopRight * torqueScaling
             : 0f;

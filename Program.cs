@@ -12,11 +12,12 @@ var simParams = new SimulationParameters
 
     MutationRate = 0.02f,
 
-    SimulationSpeed = 1.0f,
+    SimulationSpeed = 6.0f,
 
     Population = new PopulationParameters
     {
         InitialCreatureCount = 20,
+        InitialParasiteCount = 60,
         InitialPlantClusters = 10,
         MaxPlantsPerCluster = 60,
         GlobalMaxPlantCount = 500,
@@ -25,7 +26,7 @@ var simParams = new SimulationParameters
 
     Creature = new CreatureParameters
     {
-        MovementEnergyCostFactor = 10f,
+        MovementEnergyCostFactor = 0.1f,
         ReproductionEnergyThreshold = 50,
         DragCoefficient = 0.1f,
         AngularDragCoefficient = 0f
@@ -33,7 +34,7 @@ var simParams = new SimulationParameters
 
     Plant = new PlantParameters
     {
-        EnergyGain = 20f,
+        EnergyGain = 10f,
         ReproductionProbability = 0.5f
     },
 
@@ -45,10 +46,11 @@ var simParams = new SimulationParameters
 
     Physics = new PhysicsParameters
     {
-        ForceScaling = 10000f,
-        LinearDragCoefficient = 0.2f,
-        AngularDragCoefficient = 50f,
-        JetCooldown = 0.2f
+        LinearForceScaling = 10000f,
+        AngularForceScaling = 2000f,
+        LinearDragCoefficient = 0.5f,
+        TorqueDragCoefficient = 20f,
+        JetCooldown = 0.02f
     }
 };
 

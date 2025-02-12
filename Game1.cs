@@ -88,21 +88,17 @@ public class Game1 : Game
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
         _spriteBatch.Begin();
-
-
+        
         foreach (var creature in _simulation.Creatures.Values)
         {
-            var color = Color.Yellow;
+            var color = creature.IsParasite ? Color.Red : Color.Yellow;
 
             switch (creature.BodyShape)
             {
                 case BodyShape.Rod:
                 {
-                    // Draw the rod as a capsule (a rectangular center with semicircular end caps).
-                    // Let W (width) = creature.Size/3 and H (height/length) = creature.Size.
                     var W = creature.Size / 3f;
                     var H = creature.Size;
-                    // For a capsule, choose the cap diameter to equal the rod's width.
                     var radius = W / 2f;
 
                     // Setup transformation: rotate by creature.Heading and translate to creature.Position.
