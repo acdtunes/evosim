@@ -53,6 +53,8 @@ namespace EvolutionSim.Core
         public Vector2 Position => _physical.Position;
         public float Heading => _physical.Heading;
         public BodyShape BodyShape => _physical.Shape;
+        
+        public float AngularVelocity => _physical.AngularVelocity;
         public float Mass { get; }
         public float Size { get; }
         public float Age { get; private set; }
@@ -95,7 +97,7 @@ namespace EvolutionSim.Core
 
             LastSensors = ReadSensors();
 
-            var reproductionProbability = 1;
+            var reproductionProbability = 0.01;
             if (Energy >= _simulation.Parameters.Creature.ReproductionEnergyThreshold && _random.NextDouble() < reproductionProbability * dt)
             {
                 Reproduce();
@@ -183,7 +185,7 @@ namespace EvolutionSim.Core
         {
             var forces = LastJetForces;
             var costFactor = _simulation.Parameters.Creature.MovementEnergyCostFactor;
-            var turningCostFactor = 10f;
+            var turningCostFactor = 50f;
             return (forces.Front + forces.Back +
                     forces.TopRight*turningCostFactor + forces.TopLeft*turningCostFactor +
                     forces.BottomRight*turningCostFactor + forces.BottomLeft*turningCostFactor) * costFactor * dt;
@@ -221,31 +223,51 @@ namespace EvolutionSim.Core
                 plantAngleCos = (float)Math.Cos(angleDiff);
             }
 
-            Creature nearestCreature = null;
-            if (IsParasite)
-            {
-                nearestCreature = _simulation.Creatures.Values
-                    .Where(c => c.Id != this.Id && !c.IsParasite).MinBy(c => c.Position.TorusDistance(Position, _simulation.Parameters.World.WorldWidth, _simulation.Parameters.World.WorldHeight));
-            }
-            else
-            {
-                nearestCreature = _simulation.Creatures.Values
-                    .Where(c => c.Id != this.Id && c.IsParasite).MinBy(c => c.Position.TorusDistance(Position, _simulation.Parameters.World.WorldWidth, _simulation.Parameters.World.WorldHeight));
-            }
-
             float creatureAngleSin = 0;
             float creatureAngleCos = 0;
             float creatureNormalizedDistance = 1;
-            if (nearestCreature != null)
+            var worldWidth = _simulation.Parameters.World.WorldWidth;
+            var worldHeight = _simulation.Parameters.World.WorldHeight;
+            Vector2 avgOffset = Vector2.Zero;
+            int count = 0;
+            if (IsParasite)
             {
-                var toCreature = Position.TorusDifference(
-                    nearestCreature.Position,
-                    _simulation.Parameters.World.WorldWidth,
-                    _simulation.Parameters.World.WorldHeight);
-                var distanceCreature = toCreature.Length();
+                // Consider all non-parasite creatures.
+                var targets = _simulation.Creatures.Values.Where(c => c.Id != this.Id && !c.IsParasite);
+                foreach (var target in targets)
+                {
+                    float dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
+                    if (dist <= Genome.ForagingRange)
+                    {
+                        count++;
+                        avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
+                    }
+                }
+
+                plantNormalizedDistance = 1;
+            }
+            else
+            {
+                // Consider all parasite creatures.
+                var targets = _simulation.Creatures.Values.Where(c => c.Id != this.Id && c.IsParasite);
+                foreach (var target in targets)
+                {
+                    float dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
+                    if (dist <= Genome.ForagingRange)
+                    {
+                        count++;
+                        avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
+                    }
+                }
+            }
+
+            if (count > 0)
+            {
+                avgOffset /= count;
+                float distanceCreature = avgOffset.Length();
                 creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / Genome.ForagingRange, 0, 1);
-                var targetCreatureAngle = (float)Math.Atan2(toCreature.Y, toCreature.X);
-                var angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);
+                float targetCreatureAngle = (float)Math.Atan2(avgOffset.Y, avgOffset.X);
+                float angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);
                 creatureAngleSin = (float)Math.Sin(angleDiffCreature);
                 creatureAngleCos = (float)Math.Cos(angleDiffCreature);
             }

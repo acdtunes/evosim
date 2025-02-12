@@ -15,9 +15,9 @@ public class Genome
 
     private static readonly Dictionary<string, (float min, float max)> GeneRanges = new()
     {
-        { "EnergyStorage", (70f, 200f) },
+        { "EnergyStorage", (100f, 300f) },
         { "MetabolicRate", (0.1f, 2.0f) },
-        { "ForagingRange", (100f, 300f) },
+        { "ForagingRange", (50f, 200f) },
         { "Fullness", (0.7f, 1.0f) }
     };
 

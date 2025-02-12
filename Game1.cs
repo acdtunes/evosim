@@ -24,6 +24,10 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch;
     private SpriteFont _spriteFont;
 
+    // NEW: Timer for plant cluster regeneration.
+    private float _clusterRegenTimer = 0f;
+    private const float CLUSTER_REGEN_INTERVAL = 5f; 
+
     public Game1(SimulationParameters parameters, Random random)
     {
         _parameters = parameters;
@@ -79,6 +83,15 @@ public class Game1 : Game
 
         var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _simulation.Update(dt);
+
+        // NEW: Update the cluster regeneration timer.
+        _clusterRegenTimer += dt;
+        if (_clusterRegenTimer >= CLUSTER_REGEN_INTERVAL &&
+            _simulation.Plants.Count < _parameters.Population.GlobalMaxPlantCount)
+        {
+            SpawnPlantCluster();
+            _clusterRegenTimer = 0f;
+        }
 
         base.Update(gameTime);
     }
@@ -188,5 +201,31 @@ public class Game1 : Game
 
         texture.SetData(colorData);
         return texture;
+    }
+
+    // NEW: Method to spawn a new plant cluster.
+    private void SpawnPlantCluster()
+    {
+        // Determine a random center for the new cluster.
+        var clusterCenter = new Vector2(
+            _random.Next(_parameters.World.WorldWidth),
+            _random.Next(_parameters.World.WorldHeight)
+        );
+
+        // Choose a random number of plants for this cluster (up to the maximum defined in our parameters).
+        int plantCount = _random.Next(1, _parameters.Population.MaxPlantsPerCluster + 1);
+        float clusterRadius = _parameters.Population.InitialPlantClusterRadius;
+
+        for (int i = 0; i < plantCount; i++)
+        {
+            var angle = (float)(_random.NextDouble() * MathHelper.TwoPi);
+            var distance = (float)(_random.NextDouble() * clusterRadius);
+            var offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
+            var pos = clusterCenter + offset;
+            pos.X = (pos.X % _parameters.World.WorldWidth + _parameters.World.WorldWidth) % _parameters.World.WorldWidth;
+            pos.Y = (pos.Y % _parameters.World.WorldHeight + _parameters.World.WorldHeight) % _parameters.World.WorldHeight;
+            var plant = new Plant(pos, _random, _simulation);
+            _simulation.AddPlant(plant);
+        }
     }
 }

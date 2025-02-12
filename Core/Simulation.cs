@@ -127,15 +127,17 @@ namespace EvolutionSim.Core
 
                 var currentSensors = creature.LastSensors;
              
-                var creatureCostFactor = 1f;
-                float energySpent = creature.CalculateJetEnergyCost(dt) * creatureCostFactor;
+                float energySpent = creature.CalculateJetEnergyCost(dt);
                 float hunger = 1 - MathHelper.Clamp(creature.Energy / creature.Genome.EnergyStorage, 0, 1);
-                float penaltyCoefficient = 100.0f; 
+                float penaltyCoefficient = 1000.0f;
                 float penalty = (1 - hunger) * penaltyCoefficient * energySpent;
 
-                float baseReward = (creature.Energy - previousEnergy) - penalty;
+                float angularPenaltyCoefficient = 800f; 
+                float angularPenalty = (creature.AngularVelocity * creature.AngularVelocity) * angularPenaltyCoefficient * dt;
+
+                float baseReward = (creature.Energy - previousEnergy) - penalty - angularPenalty;
     
-                float parasiteRewardMultiplier = 10f;
+                float parasiteRewardMultiplier = 20f;
                 float reward = baseReward + parasiteRewardMultiplier * creature.ParasiteEnergyDelta;
 
                 var transition = new TransitionData

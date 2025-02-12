@@ -22,7 +22,6 @@ public class ParasiteCreature : Creature
     public override void Update(float dt, JetForces forces)
     {
         base.Update(dt, forces);
-        // (Existing parasite-specific energy-draining behavior remains here.)
         foreach (var other in _simulation.Creatures.Values)
         {
             if (other == this || other.IsParasite)
@@ -30,9 +29,9 @@ public class ParasiteCreature : Creature
             float collisionDistance = (this.Size + other.Size) / 2f;
             if (Vector2.Distance(this.Position, other.Position) < collisionDistance)
             {
-                float drainAmount = 10f * dt;
+                float drainAmount = 100f * dt;
                 float actualDrain = Math.Min(other.Energy, drainAmount);
-                if (actualDrain > 0)
+                if (actualDrain > 0 && Energy < Genome.Fullness * Genome.EnergyStorage)
                 {
                     Energy += actualDrain;
                     other.Energy -= actualDrain;

@@ -12,45 +12,45 @@ var simParams = new SimulationParameters
 
     MutationRate = 0.02f,
 
-    SimulationSpeed = 2.0f,
+    SimulationSpeed = 15.0f,
 
     Population = new PopulationParameters
     {
-        InitialCreatureCount = 20,
-        InitialParasiteCount = 5,
-        InitialPlantClusters = 10,
-        MaxPlantsPerCluster = 60,
+        InitialCreatureCount = 100,
+        InitialParasiteCount = 10,
+        InitialPlantClusters = 20,
+        MaxPlantsPerCluster = 15,
         GlobalMaxPlantCount = 500,
-        InitialPlantClusterRadius = 20f
+        InitialPlantClusterRadius = 10f
     },
 
     Creature = new CreatureParameters
     {
-        MovementEnergyCostFactor = 0.1f,
-        ReproductionEnergyThreshold = 50,
+        MovementEnergyCostFactor = 0.01f,
+        ReproductionEnergyThreshold = 60,
         DragCoefficient = 0.1f,
         AngularDragCoefficient = 0f
     },
 
     Plant = new PlantParameters
     {
-        EnergyGain = 10f,
-        ReproductionProbability = 0.8f
+        EnergyGain = 12f,
+        ReproductionProbability = 1f
     },
 
     Render = new RenderParameters
     {
         CreatureRenderRadius = 5,
-        PlantRenderRadius = 2
+        PlantRenderRadius = 3
     },
 
     Physics = new PhysicsParameters
     {
-        LinearForceScaling = 10000f,
-        AngularForceScaling = 2000f,
-        LinearDragCoefficient = 0.5f,
-        TorqueDragCoefficient = 20f,
-        JetCooldown = 0.02f
+        LinearForceScaling = 100f,
+        AngularForceScaling = 20f,
+        LinearDragCoefficient = 0.3f,
+        TorqueDragCoefficient = 50f,
+        JetCooldown = 0.05f
     }
 };
 
