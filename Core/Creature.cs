@@ -37,6 +37,7 @@ public abstract class Creature
             mass, 
             size,
             BodyShape.Rod,
+            random,
             simulation.Parameters
         );
         _brain = new Brain(Genome.InputCount, Genome.HiddenCount, Genome.OutputCount, _genome.BrainWeights);

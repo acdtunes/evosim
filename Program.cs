@@ -41,6 +41,14 @@ var simParams = new SimulationParameters
     {
         CreatureRenderRadius = 5,
         PlantRenderRadius = 2
+    },
+    
+    Physics = new PhysicsParameters
+    {
+        ForceScaling = 100000f,
+        LinearDragCoefficient = 0.2f,
+        AngularDragCoefficient = 40f,
+        JetCooldown = 3f
     }
 };
 

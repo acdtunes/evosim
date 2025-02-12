@@ -12,26 +12,20 @@ public class PhysicalBody
     public float Mass { get; }
     public BodyShape Shape { get; }
 
-    // World boundaries from parameters
     private float WorldWidth { get; }
     private float WorldHeight { get; }
 
-    // Creature size (used for torque calculation)
     private readonly float _size;
+    private readonly Random _random;
 
-    // Accumulated forces (reset every update)
     private float _inputThrust;
     private float _inputTorque;
 
-    // Hardcoded scaling constants
-    private const float FORCE_SCALING = 100000f;
+    private readonly float _forceScaling;
+    private readonly float _linearDragCoefficient;
+    private readonly float _angularDragCoefficient;
+    private readonly float _jetCooldown;
 
-    // Cooldown constants for burst-like movement
-    private const float JET_COOLDOWN = 3f; // seconds
-    private static readonly Random
-        _globalRandom = new Random();
-
-    // New code: each jet starts with a random cooldown timer to ensure desynchronization.
     private float _frontJetCooldownTimer = 0f;
     private float _backJetCooldownTimer = 0f;
     private float _topRightJetCooldownTimer = 0f;
@@ -39,23 +33,28 @@ public class PhysicalBody
     private float _bottomRightJetCooldownTimer = 0f;
     private float _bottomLeftJetCooldownTimer = 0f;
 
-    // Constructor (simplified)
-    public PhysicalBody(Vector2 position, float heading, float mass, float size, BodyShape shape, SimulationParameters parameters)
+    public PhysicalBody(Vector2 position, float heading, float mass, float size, BodyShape shape, Random random, SimulationParameters parameters)
     {
         Position = position;
         Heading = heading;
         Mass = mass;
-        this._size = size;
+        _size = size;
+        _random = random;
         Shape = shape;
         WorldWidth = parameters.World.WorldWidth;
         WorldHeight = parameters.World.WorldHeight;
-        // Initialize jet cooldown timers with random offsets for desynchronization.
-        _frontJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
-        _backJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
-        _topRightJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
-        _topLeftJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
-        _bottomRightJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
-        _bottomLeftJetCooldownTimer = (float)_globalRandom.NextDouble() * JET_COOLDOWN;
+        
+        _forceScaling = parameters.Physics.ForceScaling;
+        _linearDragCoefficient = parameters.Physics.LinearDragCoefficient;
+        _angularDragCoefficient = parameters.Physics.AngularDragCoefficient;
+        _jetCooldown = parameters.Physics.JetCooldown;
+        
+        _frontJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
+        _backJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
+        _topRightJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
+        _topLeftJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
+        _bottomRightJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
+        _bottomLeftJetCooldownTimer = (float)_random.NextDouble() * _jetCooldown;
     }
 
     public void Update(float dt)
@@ -97,17 +96,17 @@ public class PhysicalBody
         // --- Linear Thrust ---
         // Check individual cooldown for the back jet.
         float backThrust = (forces.Back >= minActivation && _backJetCooldownTimer <= 0f)
-            ? forces.Back * FORCE_SCALING
+            ? forces.Back * _forceScaling
             : 0f;
         if (backThrust > 0f)
-            _backJetCooldownTimer = JET_COOLDOWN;
+            _backJetCooldownTimer = _jetCooldown;
 
         // Check individual cooldown for the front jet.
         float frontThrust = (forces.Front >= minActivation && _frontJetCooldownTimer <= 0f)
-            ? forces.Front * FORCE_SCALING
+            ? forces.Front * _forceScaling
             : 0f;
         if (frontThrust > 0f)
-            _frontJetCooldownTimer = JET_COOLDOWN;
+            _frontJetCooldownTimer = _jetCooldown;
 
         // The net thrust (positive means forward; negative means backward).
         float netThrust = backThrust - frontThrust;
@@ -115,30 +114,30 @@ public class PhysicalBody
         // --- Rotational (Torque) Forces ---
         // Check individual cooldowns for turning jets.
         
-        var torqueScaling = FORCE_SCALING / 2;
+        var torqueScaling = _forceScaling / 2;
         float topRightForce = (forces.TopRight >= minActivation && _topRightJetCooldownTimer <= 0f)
             ? forces.TopRight * torqueScaling
             : 0f;
         if (topRightForce > 0f)
-            _topRightJetCooldownTimer = JET_COOLDOWN;
+            _topRightJetCooldownTimer = _jetCooldown;
 
         float topLeftForce = (forces.TopLeft >= minActivation && _topLeftJetCooldownTimer <= 0f)
             ? forces.TopLeft * torqueScaling
             : 0f;
         if (topLeftForce > 0f)
-            _topLeftJetCooldownTimer = JET_COOLDOWN;
+            _topLeftJetCooldownTimer = _jetCooldown;
 
         float bottomRightForce = (forces.BottomRight >= minActivation && _bottomRightJetCooldownTimer <= 0f)
             ? forces.BottomRight * torqueScaling
             : 0f;
         if (bottomRightForce > 0f)
-            _bottomRightJetCooldownTimer = JET_COOLDOWN;
+            _bottomRightJetCooldownTimer = _jetCooldown;
 
         float bottomLeftForce = (forces.BottomLeft >= minActivation && _bottomLeftJetCooldownTimer <= 0f)
             ? forces.BottomLeft * torqueScaling
             : 0f;
         if (bottomLeftForce > 0f)
-            _bottomLeftJetCooldownTimer = JET_COOLDOWN;
+            _bottomLeftJetCooldownTimer = _jetCooldown;
 
         // For a rectangular body, compute half-dimensions.
         float halfWidth = _size / 2f;
@@ -216,10 +215,8 @@ public class PhysicalBody
         Vector2 thrustDirection = new Vector2((float)Math.Cos(heading), (float)Math.Sin(heading));
         Vector2 thrust = thrustDirection * _inputThrust;
 
-        var linearDragCoefficient = 0.2f;
-        Vector2 linearDrag = - linearDragCoefficient * vel * vel.Length();
-        var angularDragCoefficient = 40;
-        float angularDrag = -Math.Sign(angularVel) *  angularDragCoefficient * angularVel * angularVel;
+        Vector2 linearDrag = - _linearDragCoefficient * vel * vel.Length();
+        float angularDrag = - Math.Sign(angularVel) * _angularDragCoefficient * angularVel * angularVel;
 
         Vector2 acceleration = (thrust + linearDrag) / Mass;
         float angularAcceleration = (_inputTorque + angularDrag) / GetMomentOfInertia();
