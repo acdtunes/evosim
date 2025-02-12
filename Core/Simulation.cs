@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 
 namespace EvolutionSim.Core;
@@ -9,7 +10,13 @@ public class Simulation
 {
     private readonly Dictionary<int, Creature> _deadCreatures;
     private readonly Dictionary<int, Plant> _deadPlants;
+
+    private readonly object _jetForcesLock = new();
     private readonly Random _random;
+
+    private readonly BrainClient _client;
+
+    private Dictionary<int, JetForces> _jetForces = new();
     private int _nextCreatureId;
     private int _nextPlantId;
 
@@ -21,6 +28,8 @@ public class Simulation
         Plants = new Dictionary<int, Plant>();
         _deadCreatures = new Dictionary<int, Creature>();
         _deadPlants = new Dictionary<int, Plant>();
+
+        _client = new BrainClient("localhost", 5000);
 
         for (var i = 0; i < Parameters.Population.InitialCreatureCount; i++)
         {
@@ -38,18 +47,20 @@ public class Simulation
                 _random.Next(Parameters.World.WorldHeight)
             );
 
-            int plantCount = _random.Next(1, Parameters.Population.MaxPlantsPerCluster + 1);
+            var plantCount = _random.Next(1, Parameters.Population.MaxPlantsPerCluster + 1);
 
-            for (int i = 0; i < plantCount; i++)
+            for (var i = 0; i < plantCount; i++)
             {
-                float angle = (float)(_random.NextDouble() * MathHelper.TwoPi);
-                float distance = (float)(_random.NextDouble() * Parameters.Population.InitialPlantClusterRadius);
-                Vector2 offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
-                Vector2 pos = clusterCenter + offset;
-                
-                pos.X = (pos.X % Parameters.World.WorldWidth + Parameters.World.WorldWidth) % Parameters.World.WorldWidth;
-                pos.Y = (pos.Y % Parameters.World.WorldHeight + Parameters.World.WorldHeight) % Parameters.World.WorldHeight;
-                
+                var angle = (float)(_random.NextDouble() * MathHelper.TwoPi);
+                var distance = (float)(_random.NextDouble() * Parameters.Population.InitialPlantClusterRadius);
+                var offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
+                var pos = clusterCenter + offset;
+
+                pos.X = (pos.X % Parameters.World.WorldWidth + Parameters.World.WorldWidth) %
+                        Parameters.World.WorldWidth;
+                pos.Y = (pos.Y % Parameters.World.WorldHeight + Parameters.World.WorldHeight) %
+                        Parameters.World.WorldHeight;
+
                 var plant = new Plant(pos, _random, this);
                 Plants.Add(plant.Id, plant);
             }
@@ -64,23 +75,55 @@ public class Simulation
     {
         dt *= Parameters.SimulationSpeed;
 
-        var creatureCopy = new List<Creature>(Creatures.Values);
-        foreach (var creature in creatureCopy) 
-            creature.Update(dt);
+        EvaluateForces();
 
-        foreach (var creature in _deadCreatures.Values) 
+        Dictionary<int, JetForces> forcesBatch;
+        lock (_jetForcesLock)
+        {
+            forcesBatch = new Dictionary<int, JetForces>(_jetForces);
+        }
+
+        foreach (var creature in new List<Creature>(Creatures.Values))
+        {
+            var forces = forcesBatch.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0, 0, 0, 0);
+            creature.Update(dt, forces);
+        }
+
+        foreach (var creature in _deadCreatures.Values)
             Creatures.Remove(creature.Id);
-        
+
         _deadCreatures.Clear();
 
-        var plantCopy = new List<Plant>(Plants.Values);
-        foreach (var plant in plantCopy) 
+        foreach (var plant in new List<Plant>(Plants.Values))
             plant.Update(dt);
 
-        foreach (var plant in _deadPlants.Values) 
+        foreach (var plant in _deadPlants.Values)
             Plants.Remove(plant.Id);
-        
+
         _deadPlants.Clear();
+    }
+
+    private void EvaluateForces()
+    {
+        Task.Run(async () =>
+        {
+            var sensorBatch = new Dictionary<int, Sensors>();
+            foreach (var creature in Creatures.Values)
+                sensorBatch[creature.Id] = creature.ReadSensors();
+
+            try
+            {
+                var result = await _client.EvaluateBrainsBatchAsync(sensorBatch);
+                lock (_jetForcesLock)
+                {
+                    _jetForces = result;
+                }
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+        });
     }
 
     public void KillCreature(Creature creature)
@@ -110,7 +153,9 @@ public class Simulation
 
     public Plant GetPlantAtPosition(Vector2 position, float radius)
     {
-        return Plants.Values.FirstOrDefault(plant => plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight) <= radius);
+        return Plants.Values.FirstOrDefault(plant =>
+            plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight) <=
+            radius);
     }
 
 
@@ -121,9 +166,10 @@ public class Simulation
 
     public Plant GetNearestPlant(Vector2 position)
     {
-        return Plants.Values.MinBy(plant => plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight));
+        return Plants.Values.MinBy(plant =>
+            plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight));
     }
-    
+
     public Creature GetNearestCreature(Vector2 position, int excludeId)
     {
         return Creatures.Values

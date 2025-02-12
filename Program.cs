@@ -4,16 +4,16 @@ using EvolutionSim.Core;
 
 var simParams = new SimulationParameters
 {
-    World = new WorldParameters 
-    { 
-        WorldWidth = 1200, 
-        WorldHeight = 800 
+    World = new WorldParameters
+    {
+        WorldWidth = 1200,
+        WorldHeight = 800
     },
-    
+
     MutationRate = 0.02f,
 
     SimulationSpeed = 1.0f,
-    
+
     Population = new PopulationParameters
     {
         InitialCreatureCount = 20,
@@ -22,7 +22,7 @@ var simParams = new SimulationParameters
         GlobalMaxPlantCount = 500,
         InitialPlantClusterRadius = 20f
     },
-    
+
     Creature = new CreatureParameters
     {
         MovementEnergyCostFactor = 10f,
@@ -30,25 +30,25 @@ var simParams = new SimulationParameters
         DragCoefficient = 0.1f,
         AngularDragCoefficient = 0f
     },
-    
-    Plant = new PlantParameters 
-    { 
+
+    Plant = new PlantParameters
+    {
         EnergyGain = 20f,
-        ReproductionProbability = 0.5f,
+        ReproductionProbability = 0.5f
     },
-    
+
     Render = new RenderParameters
     {
         CreatureRenderRadius = 5,
         PlantRenderRadius = 2
     },
-    
+
     Physics = new PhysicsParameters
     {
-        ForceScaling = 100000f,
+        ForceScaling = 10000f,
         LinearDragCoefficient = 0.2f,
-        AngularDragCoefficient = 40f,
-        JetCooldown = 3f
+        AngularDragCoefficient = 50f,
+        JetCooldown = 1f
     }
 };
 

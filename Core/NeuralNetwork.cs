@@ -8,16 +8,17 @@ public class NeuralNetwork
     private readonly int _hiddenCount;
     private readonly int _inputCount;
     private readonly int _outputCount;
-    private readonly float[,] _weightsInputHidden;
     private readonly float[,] _weightsHiddenHidden;
     private readonly float[,] _weightsHiddenOutput;
+    private readonly float[,] _weightsInputHidden;
 
     public NeuralNetwork(int inputCount, int hiddenCount, int outputCount, IReadOnlyList<float> weights)
     {
         _inputCount = inputCount;
         _hiddenCount = hiddenCount;
         _outputCount = outputCount;
-        var expectedLength = (inputCount + 1) * hiddenCount + (hiddenCount + 1) * hiddenCount + (hiddenCount + 1) * outputCount;
+        var expectedLength = (inputCount + 1) * hiddenCount + (hiddenCount + 1) * hiddenCount +
+                             (hiddenCount + 1) * outputCount;
         if (weights.Count != expectedLength)
             throw new ArgumentException($"Expected {expectedLength} weights, got {weights.Count}");
 
