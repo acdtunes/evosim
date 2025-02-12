@@ -19,6 +19,10 @@ public class Simulation
     private Dictionary<int, JetForces> _jetForces = new();
     private int _nextCreatureId;
     private int _nextPlantId;
+    
+    public SimulationParameters Parameters { get; }
+    public Dictionary<int, Creature> Creatures { get; }
+    public Dictionary<int, Plant> Plants { get; }
 
     public Simulation(SimulationParameters parameters, Random random)
     {
@@ -31,15 +35,29 @@ public class Simulation
 
         _client = new BrainClient("localhost", 5000);
 
-        for (var i = 0; i < Parameters.Population.InitialCreatureCount; i++)
-        {
-            var position = new Vector2(
-                (float)_random.NextDouble() * Parameters.World.WorldWidth,
-                (float)_random.NextDouble() * Parameters.World.WorldHeight);
-            var creature = new SimpleCreature(position, 15f, 5f, _random, this);
-            Creatures.Add(creature.Id, creature);
-        }
+        PopulateCreatures();
 
+        PopulatePlants();
+        
+        InitializeBrains();
+    }
+
+    private void InitializeBrains()
+    {
+        var weights = new Dictionary<int, float[]>();
+        foreach (var creature in Creatures.Values)
+            weights[creature.Id] = creature.Genome.BrainWeights;
+
+        var initResults = _client.InitializeBrainsAsync(weights).Result;
+
+        foreach (var kvp in initResults.Where(kvp => !kvp.Value))
+        {
+            Console.WriteLine($"Initialization failed for creature {kvp.Key}");
+        }
+    }
+
+    private void PopulatePlants()
+    {
         for (var cluster = 0; cluster < Parameters.Population.InitialPlantClusters; cluster++)
         {
             var clusterCenter = new Vector2(
@@ -67,9 +85,17 @@ public class Simulation
         }
     }
 
-    public SimulationParameters Parameters { get; }
-    public Dictionary<int, Creature> Creatures { get; }
-    public Dictionary<int, Plant> Plants { get; }
+    private void PopulateCreatures()
+    {
+        for (var i = 0; i < Parameters.Population.InitialCreatureCount; i++)
+        {
+            var position = new Vector2(
+                (float)_random.NextDouble() * Parameters.World.WorldWidth,
+                (float)_random.NextDouble() * Parameters.World.WorldHeight);
+            var creature = new SimpleCreature(position, 15f, 5f, _random, this);
+            Creatures.Add(creature.Id, creature);
+        }
+    }
 
     public void Update(float dt)
     {
@@ -107,16 +133,16 @@ public class Simulation
     {
         Task.Run(async () =>
         {
-            var sensorBatch = new Dictionary<int, Sensors>();
+            var sensors = new Dictionary<int, Sensors>();
             foreach (var creature in Creatures.Values)
-                sensorBatch[creature.Id] = creature.ReadSensors();
+                sensors[creature.Id] = creature.ReadSensors();
 
             try
             {
-                var result = await _client.EvaluateBrainsBatchAsync(sensorBatch);
+                var forces = await _client.EvaluateBrainsAsync(sensors);
                 lock (_jetForcesLock)
                 {
-                    _jetForces = result;
+                    _jetForces = forces;
                 }
             }
             catch (Exception)

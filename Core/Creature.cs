@@ -5,8 +5,7 @@ namespace EvolutionSim.Core;
 
 public abstract class Creature
 {
-    private readonly Brain _brain;
-    private readonly Genome _genome;
+    public Genome Genome { get; set; }
     private readonly PhysicalBody _physical;
     private readonly Random _random;
     private readonly Simulation _simulation;
@@ -17,12 +16,10 @@ public abstract class Creature
     private float _cachedBottomLeft;
     private float _cachedBottomRight;
 
-    // NEW: Cached force values for each individual jet
     private float _cachedFront;
     private float _cachedTopLeft;
     private float _cachedTopRight;
 
-    // NEW: Independent per-jet cooldown timers
     private float _frontJetTimer;
     private float _topLeftJetTimer;
     private float _topRightJetTimer;
@@ -34,10 +31,9 @@ public abstract class Creature
         Mass = mass;
         _random = random;
         _simulation = simulation;
-        _genome = new Genome(random, simulation.Parameters.MutationRate);
+        Genome = new Genome(random, simulation.Parameters.MutationRate);
         var heading = (float)(_random.NextDouble() * MathHelper.TwoPi);
         _physical = new PhysicalBody(position, heading, mass, size, BodyShape.Rod, random, simulation.Parameters);
-        _brain = new Brain(Genome.InputCount, Genome.HiddenCount, Genome.OutputCount, _genome.BrainWeights);
         Energy = 100f;
 
         InitializeJetTimers(simulation);
@@ -149,9 +145,9 @@ public abstract class Creature
     {
         var eatingRadius = Size / 2;
         var plant = _simulation.GetPlantAtPosition(Position, eatingRadius);
-        if (plant != null && Energy < _genome.Fullness * _genome.EnergyStorage)
+        if (plant != null && Energy < Genome.Fullness * Genome.EnergyStorage)
         {
-            Energy = Math.Min(Energy + _simulation.Parameters.Plant.EnergyGain, _genome.EnergyStorage);
+            Energy = Math.Min(Energy + _simulation.Parameters.Plant.EnergyGain, Genome.EnergyStorage);
             _simulation.KillPlant(plant);
         }
     }
@@ -167,7 +163,7 @@ public abstract class Creature
             var toPlant = Position.TorusDifference(nearestPlant.Position, _simulation.Parameters.World.WorldWidth,
                 _simulation.Parameters.World.WorldHeight);
             var distance = toPlant.Length();
-            plantNormalizedDistance = MathHelper.Clamp(distance / _genome.ForagingRange, 0, 1);
+            plantNormalizedDistance = MathHelper.Clamp(distance / Genome.ForagingRange, 0, 1);
 
             var targetAngle = (float)Math.Atan2(toPlant.Y, toPlant.X);
             var angleDiff = MathHelper.WrapAngle(targetAngle - Heading);
@@ -184,7 +180,7 @@ public abstract class Creature
             var toCreature = Position.TorusDifference(nearestCreature.Position, _simulation.Parameters.World.WorldWidth,
                 _simulation.Parameters.World.WorldHeight);
             var distanceCreature = toCreature.Length();
-            creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / _genome.ForagingRange, 0, 1);
+            creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / Genome.ForagingRange, 0, 1);
 
             var targetCreatureAngle = (float)Math.Atan2(toCreature.Y, toCreature.X);
             var angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);

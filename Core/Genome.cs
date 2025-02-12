@@ -37,7 +37,7 @@ public class Genome
         BrainWeights = new float[TotalBrainWeights];
 
         for (var i = 0; i < BrainWeights.Length; i++)
-            BrainWeights[i] = (float)((_random.NextDouble() * 2 - 1) * 0.1);
+            BrainWeights[i] = (float)((_random.NextDouble() * 2 - 1));
     }
 
     private Genome(float energyStorage, float metabolicRate, float foragingRange, float fullness, float mutationRate,

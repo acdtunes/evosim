@@ -48,7 +48,7 @@ var simParams = new SimulationParameters
         ForceScaling = 10000f,
         LinearDragCoefficient = 0.2f,
         AngularDragCoefficient = 50f,
-        JetCooldown = 1f
+        JetCooldown = 0.2f
     }
 };
 
