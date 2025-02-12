@@ -25,7 +25,7 @@ var simParams = new SimulationParameters
     
     Creature = new CreatureParameters
     {
-        MovementEnergyCostFactor = 0.0001f,
+        MovementEnergyCostFactor = 10f,
         ReproductionEnergyThreshold = 50,
         DragCoefficient = 0.1f,
         AngularDragCoefficient = 0f

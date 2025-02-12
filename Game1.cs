@@ -5,6 +5,9 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using Color = Microsoft.Xna.Framework.Color;
+using System.IO;
+using FontStashSharp;
+using SpriteFontPlus;
 
 namespace EvolutionSim;
 
@@ -20,6 +23,9 @@ public class Game1 : Game
 
     private Simulation _simulation;
     private SpriteBatch _spriteBatch;
+    private Creature _selectedCreature;
+    private MouseState _previousMouseState;
+    private SpriteFont _spriteFont;
 
     public Game1(SimulationParameters parameters, Random random)
     {
@@ -54,6 +60,25 @@ public class Game1 : Game
     {
         if (Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
+
+        // Handle mouse click to select a creature.
+        MouseState currentMouseState = Mouse.GetState();
+        if (currentMouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
+        {
+            // Get the mouse click position.
+            var mousePos = new Vector2(currentMouseState.X, currentMouseState.Y);
+
+            // Find a creature whose position is close to the click (within 10 pixels).
+            foreach (var creature in _simulation.Creatures.Values)
+            {
+                if (Vector2.Distance(mousePos, creature.Position) < 10f)
+                {
+                    _selectedCreature = creature;
+                    break;
+                }
+            }
+        }
+        _previousMouseState = currentMouseState;
 
         var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _simulation.Update(dt);
@@ -125,6 +150,30 @@ public class Game1 : Game
             _spriteBatch.Draw(_plantTexture, plant.Position, Color.White);
 
         _spriteBatch.End();
+
+        if (_selectedCreature != null)
+        {
+            string stats = $"Position: {_selectedCreature.Position}\n" +
+                           $"Energy: {_selectedCreature.Energy:F2}\n" +
+                           $"Sensors:\n" +
+                           $"  PlantNorm: {_selectedCreature.LastSensors.PlantNormalizedDistance:F2}, " +
+                           $"PlantSin: {_selectedCreature.LastSensors.PlantAngleSin:F2}, " +
+                           $"PlantCos: {_selectedCreature.LastSensors.PlantAngleCos:F2}\n" +
+                           $"  CreatureNorm: {_selectedCreature.LastSensors.CreatureNormalizedDistance:F2}, " +
+                           $"CreatureSin: {_selectedCreature.LastSensors.CreatureAngleSin:F2}, " +
+                           $"CreatureCos: {_selectedCreature.LastSensors.CreatureAngleCos:F2}\n" +
+                           $"  Hunger: {_selectedCreature.LastSensors.Hunger:F2}\n" +
+                           $"JetForces:\n" +
+                           $"  Front: {_selectedCreature.LastJetForces.Front:F2}, " +
+                           $"Back: {_selectedCreature.LastJetForces.Back:F2}\n" +
+                           $"  TopRight: {_selectedCreature.LastJetForces.TopRight:F2}, " +
+                           $"TopLeft: {_selectedCreature.LastJetForces.TopLeft:F2}\n" +
+                           $"  BottomRight: {_selectedCreature.LastJetForces.BottomRight:F2}, " +
+                           $"BottomLeft: {_selectedCreature.LastJetForces.BottomLeft:F2}";
+
+            Console.Clear();
+            Console.WriteLine(stats);
+        }
 
         base.Draw(gameTime);
     }

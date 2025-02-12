@@ -96,13 +96,11 @@ public class Simulation
     public void AddCreature(Creature creature)
     {
         Creatures.Add(creature.Id, creature);
-        Console.WriteLine($"Creature count: {Creatures.Count}");
     }
 
     public void AddPlant(Plant plant)
     {
         Plants.Add(plant.Id, plant);
-        Console.WriteLine($"Plant count: {Plants.Count}");
     }
 
     public int GetNextCreatureId()

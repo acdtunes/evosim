@@ -13,9 +13,10 @@ public class Genome
 
     private static readonly Dictionary<string, (float min, float max)> GeneRanges = new()
     {
-        { "EnergyStorage", (100f, 200f) },
+        { "EnergyStorage", (70f, 200f) },
         { "MetabolicRate", (0.1f, 2.0f) },
-        { "ForagingRange", (50f, 100f) }
+        { "ForagingRange", (100f, 300f) },
+        { "Fullness", (0.7f, 1.0f) }
     };
 
     private readonly float _mutationRate;
@@ -28,19 +29,24 @@ public class Genome
 
         MetabolicRate = RandomRange("MetabolicRate");
         EnergyStorage = RandomRange("EnergyStorage");
+        ForagingRange = RandomRange("ForagingRange");
+        Fullness = RandomRange("Fullness");
+
         BrainWeights = new float[TotalBrainWeights];
         
         for (var i = 0; i < BrainWeights.Length; i++) 
             BrainWeights[i] = (float)((_random.NextDouble() * 2 - 1) * 0.1);
     }
     
-    private Genome(float energyStorage, float foragingRange, float mutationRate, Random random, float[] brainWeights)
+    private Genome(float energyStorage, float metabolicRate, float foragingRange, float fullness, float mutationRate, Random random, float[] brainWeights)
     {
         _mutationRate = mutationRate;
         _random = random;
         EnergyStorage = energyStorage;
-        BrainWeights = brainWeights;
+        MetabolicRate = metabolicRate;
         ForagingRange = foragingRange;
+        Fullness = fullness;
+        BrainWeights = brainWeights;
     }
 
     public float EnergyStorage { get; }
@@ -49,6 +55,7 @@ public class Genome
     
     public float MetabolicRate { get; set; }
     public float ForagingRange { get; set; }
+    public float Fullness { get; set; }
 
 
     private float RandomRange(string gene)
@@ -67,7 +74,7 @@ public class Genome
 
     public Genome Clone()
     {
-        return new Genome(EnergyStorage, ForagingRange, _mutationRate, _random, (float[])BrainWeights.Clone());
+        return new Genome(EnergyStorage, MetabolicRate, ForagingRange, Fullness, _mutationRate, _random, (float[])BrainWeights.Clone());
     }
 
     public Genome Mutate()
@@ -75,6 +82,7 @@ public class Genome
         var newEnergyStorage = MutateGene(EnergyStorage, "EnergyStorage");
         var newMetabolicRate = MutateGene(MetabolicRate, "MetabolicRate");
         var newForagingRange = MutateGene(ForagingRange, "ForagingRange");
+        var newFullness = MutateGene(Fullness, "Fullness");
 
         var newBrainWeights = (float[])BrainWeights.Clone();
         for (var i = 0; i < newBrainWeights.Length; i++)
@@ -85,7 +93,7 @@ public class Genome
                 newBrainWeights[i] = MathHelper.Clamp(newBrainWeights[i], -1, 1);
             }
 
-        return new Genome(newEnergyStorage, newForagingRange, newMetabolicRate, _random, newBrainWeights);
+        return new Genome(newEnergyStorage, newMetabolicRate, newForagingRange, newFullness, _mutationRate, _random, newBrainWeights);
     }
 
     private float MutateGene(float geneValue, string gene)

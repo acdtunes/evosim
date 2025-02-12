@@ -11,9 +11,7 @@ public abstract class Creature
     private readonly Simulation _simulation;
     private readonly Brain _brain;
     private readonly PhysicalBody _physical;
-    // … other fields
 
-    // Expose position, heading, etc.
     public Vector2 Position => _physical.Position;
     public float Heading => _physical.Heading;
     public BodyShape BodyShape => _physical.Shape;
@@ -21,6 +19,10 @@ public abstract class Creature
     public float Size { get; }
     public float Age { get; private set; }
     private readonly Genome _genome;
+
+    // NEW: Store the latest sensor readings and jet forces for debugging/display purposes.
+    public Sensors LastSensors { get; private set; }
+    public JetForces LastJetForces { get; private set; }
 
     protected Creature(Vector2 position, float size, float mass, Random random, Simulation simulation)
     {
@@ -48,7 +50,7 @@ public abstract class Creature
     {
         Age += dt;
         
-        // Get sensor readings (we’ll add hunger/energy to the sensor inputs later)
+        // Get sensor readings and store stats (thanks to the modified EvaluateBrain)
         var forces = EvaluateBrain();
         
         // Calculate the energy cost from activating jets.
@@ -62,11 +64,6 @@ public abstract class Creature
         // Check for plant collision (eating)
         CheckForPlantCollision();
 
-        // If energy runs out, the creature dies.
-        if (Energy <= 0)
-        {
-            _simulation.KillCreature(this);
-        }
     }
 
     /// <summary>
@@ -74,8 +71,7 @@ public abstract class Creature
     /// </summary>
     private float CalculateJetEnergyCost(JetForces forces, float dt)
     {
-        // For example, energy cost could be proportional to the sum of jet activations.
-        const float costFactor = 0.1f;
+        var costFactor = _simulation.Parameters.Creature.MovementEnergyCostFactor;
         float cost = (forces.Front + forces.Back +
                       forces.TopRight + forces.TopLeft +
                       forces.BottomRight + forces.BottomLeft) * costFactor * dt;
@@ -83,19 +79,22 @@ public abstract class Creature
     }
 
     /// <summary>
-    /// Checks whether the creature is close enough to a plant to “eat” it.
+    /// Checks whether the creature is close enough to a plant to "eat" it.
     /// </summary>
     private void CheckForPlantCollision()
     {
-        float eatingRadius = Size/2; 
+        float eatingRadius = Size / 2; 
         var plant = _simulation.GetPlantAtPosition(Position, eatingRadius);
-        if (plant != null)
+        if (plant != null && Energy < _genome.Fullness * _genome.EnergyStorage)
         {
-            Energy += _simulation.Parameters.Plant.EnergyGain;
+            Energy = Math.Min(Energy + _simulation.Parameters.Plant.EnergyGain, _genome.EnergyStorage);
             _simulation.KillPlant(plant);
         }
     }
 
+    /// <summary>
+    /// Evaluates the creature's brain given current sensors.
+    /// </summary>
     private JetForces EvaluateBrain()
     {
         // --- Plant Sensor (already implemented) ---
@@ -138,7 +137,10 @@ public abstract class Creature
             creatureNormalizedDistance, creatureAngleSin, creatureAngleCos,
             hungerSensor
         );
-    
-        return _brain.Evaluate(sensors);
+
+        LastSensors = sensors;
+        var forces = _brain.Evaluate(sensors);
+        LastJetForces = forces;
+        return forces;
     }
 }
