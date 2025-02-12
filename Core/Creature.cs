@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace EvolutionSim.Core
 {
@@ -27,27 +28,25 @@ namespace EvolutionSim.Core
 
         public virtual bool IsParasite => false;
 
-        public Creature(Vector2 position, float size, float mass, Random random, Simulation simulation)
+        public Creature(Vector2 position, float size, float mass, Random random, Simulation simulation, Genome? genome = null)
         {
             Id = simulation.GetNextCreatureId();
             Size = size;
             Mass = mass;
             _random = random;
             _simulation = simulation;
-            Genome = new Genome(random, simulation.Parameters.MutationRate);
+            Genome = genome ?? new Genome(random, simulation.Parameters.MutationRate);
             var heading = (float)(_random.NextDouble() * MathHelper.TwoPi);
             _physical = new PhysicalBody(position, heading, mass, size, BodyShape.Rod, random, simulation.Parameters);
             Energy = 100f;
 
             InitializeJetTimers(simulation);
-
             LastJetForces = new JetForces(0f, 0f, 0f, 0f, 0f, 0f);
-
             LastSensors = ReadSensors();
             PreviousSensors = LastSensors;
             PreviousEnergy = Energy;
         }
-
+        
         public int Id { get; }
         public float Energy { get; set; }
 
@@ -95,6 +94,44 @@ namespace EvolutionSim.Core
                 CheckForPlantCollision();;
 
             LastSensors = ReadSensors();
+
+            var reproductionProbability = 1;
+            if (Energy >= _simulation.Parameters.Creature.ReproductionEnergyThreshold && _random.NextDouble() < reproductionProbability * dt)
+            {
+                Reproduce();
+            }
+            if (Energy <= 0)
+            {
+                _simulation.KillCreature(this);
+            }
+        }
+        
+        protected virtual void Reproduce()
+        {
+            // Create a mutated copy of the genome (which includes brain weights)
+            var offspringGenome = Genome.Mutate();
+
+            // Deduct half of the parent's energy and assign it to the offspring.
+            float offspringEnergy = Energy / 2;
+            Energy /= 2;
+
+            // Place the offspring near the parent (using a small random offset)
+            var offset = new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * Size;
+            var offspringPosition = Position + offset;
+
+            Creature offspring;
+            if (this is ParasiteCreature)
+            {
+                offspring = new ParasiteCreature(offspringPosition, _random, _simulation, offspringGenome);
+            }
+            else
+            {
+                offspring = new SimpleCreature(offspringPosition, Size, Mass, _random, _simulation, offspringGenome);
+            }
+            offspring.Energy = offspringEnergy;
+            _simulation.AddCreature(offspring);
+
+            Task.Run(async () => await _simulation.InitializeBrainForCreature(offspring));
         }
 
         private void UpdateJetTimers(float dt, JetForces forces)
@@ -146,9 +183,10 @@ namespace EvolutionSim.Core
         {
             var forces = LastJetForces;
             var costFactor = _simulation.Parameters.Creature.MovementEnergyCostFactor;
+            var turningCostFactor = 10f;
             return (forces.Front + forces.Back +
-                    forces.TopRight + forces.TopLeft +
-                    forces.BottomRight + forces.BottomLeft) * costFactor * dt;
+                    forces.TopRight*turningCostFactor + forces.TopLeft*turningCostFactor +
+                    forces.BottomRight*turningCostFactor + forces.BottomLeft*turningCostFactor) * costFactor * dt;
         }
 
         private void CheckForPlantCollision()

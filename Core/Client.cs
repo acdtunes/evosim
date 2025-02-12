@@ -65,7 +65,7 @@ namespace EvolutionSim.Core
             await _requestLock.WaitAsync();
             try
             {
-                _writer.WriteLine(json);
+                await _writer.WriteLineAsync(json);
                 string responseLine = await _reader.ReadLineAsync();
                 if (string.IsNullOrEmpty(responseLine))
                     throw new Exception("Received empty response from RL server during evaluation.");
@@ -75,6 +75,30 @@ namespace EvolutionSim.Core
                     throw new Exception("Invalid response from server: " + responseLine);
 
                 return responseObj.results;
+            }
+            finally
+            {
+                _requestLock.Release();
+            }
+        }
+        
+        public async Task InitBrainAsync(int creatureId, float[] brainWeights)
+        {
+            var initMessage = new
+            {
+                type = "init",
+                id = creatureId,
+                brain_weights = brainWeights
+            };
+
+            string json = JsonConvert.SerializeObject(initMessage);
+
+            await _requestLock.WaitAsync();
+            try
+            {
+                await _writer.WriteLineAsync(json);
+                string responseLine = await _reader.ReadLineAsync();
+                // Optionally, you can verify that the response indicates successful initialization.
             }
             finally
             {
@@ -95,7 +119,7 @@ namespace EvolutionSim.Core
             await _requestLock.WaitAsync();
             try
             {
-                _writer.WriteLine(json);
+                await _writer.WriteLineAsync(json);
                 string responseLine = await _reader.ReadLineAsync();
                 if (string.IsNullOrEmpty(responseLine))
                     throw new Exception("Received empty response from RL server during training.");

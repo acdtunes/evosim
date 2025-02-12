@@ -76,6 +76,7 @@ namespace EvolutionSim.Core
                     (float)_random.NextDouble() * Parameters.World.WorldHeight);
                 var creature = new SimpleCreature(position, 15f, 5f, _random, this);
                 Creatures.Add(creature.Id, creature);
+                Task.Run(async () => await _client.InitBrainAsync(creature.Id, creature.Genome.BrainWeights));
             }
             
             for (var i = 0; i < Parameters.Population.InitialParasiteCount; i++)
@@ -85,6 +86,19 @@ namespace EvolutionSim.Core
                     (float)_random.NextDouble() * Parameters.World.WorldHeight);
                 var parasite = new ParasiteCreature(position, _random, this);
                 Creatures.Add(parasite.Id, parasite);
+                Task.Run(async () => await _client.InitBrainAsync(parasite.Id, parasite.Genome.BrainWeights));
+            }
+        }
+        
+        public async Task InitializeBrainForCreature(Creature creature)
+        {
+            try
+            {
+                await _client.InitBrainAsync(creature.Id, creature.Genome.BrainWeights);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error initializing brain for creature " + creature.Id + ": " + ex.Message);
             }
         }
 
@@ -100,7 +114,6 @@ namespace EvolutionSim.Core
                 forcesBatch = new Dictionary<int, JetForces>(_jetForces);
             }
 
-            // Prepare a list for RL training transitions.
             List<TransitionData> trainingTransitions = new List<TransitionData>();
 
             // For each creature, update its state and build a training transition.

@@ -12,12 +12,12 @@ var simParams = new SimulationParameters
 
     MutationRate = 0.02f,
 
-    SimulationSpeed = 6.0f,
+    SimulationSpeed = 2.0f,
 
     Population = new PopulationParameters
     {
         InitialCreatureCount = 20,
-        InitialParasiteCount = 60,
+        InitialParasiteCount = 5,
         InitialPlantClusters = 10,
         MaxPlantsPerCluster = 60,
         GlobalMaxPlantCount = 500,
@@ -35,7 +35,7 @@ var simParams = new SimulationParameters
     Plant = new PlantParameters
     {
         EnergyGain = 10f,
-        ReproductionProbability = 0.5f
+        ReproductionProbability = 0.8f
     },
 
     Render = new RenderParameters

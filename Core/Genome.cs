@@ -7,7 +7,7 @@ namespace EvolutionSim.Core;
 public class Genome
 {
     public const int InputCount = 7;
-    public const int HiddenCount = 12;
+    public const int HiddenCount = 128;
     public const int OutputCount = 6;
 
     private const int TotalBrainWeights = (InputCount + 1) * HiddenCount + (HiddenCount + 1) * HiddenCount +

@@ -113,8 +113,105 @@ def get_brain(creature_id):
             brains[creature_id] = Brain()
         return brains[creature_id]
 
-# Handle client connections from the C# simulation.
+def set_weights_from_flat_list(model, flat_list):
+    flat_tensor = torch.tensor(flat_list, dtype=torch.float32)
+    pointer = 0
+    for param in model.parameters():
+        numel = param.numel()
+        param.data.copy_(flat_tensor[pointer:pointer+numel].view_as(param))
+        pointer += numel
+
 def handle_client(conn, addr):
+    print(f"Connected by {addr}")
+    buffer = ""
+    try:
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                break
+            buffer += data.decode('utf-8')
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                if not line.strip():
+                    continue
+                try:
+                    message = json.loads(line)
+                    msg_type = message.get("type")
+                    if msg_type == "init":
+                        creature_id = message.get("id")
+                        brain_weights = message.get("brain_weights")
+                        if brain_weights is None:
+                            response = {"error": "Missing brain_weights"}
+                        else:
+                            # Create a new brain and initialize the actor using the provided weights.
+                            brain = Brain()
+                            set_weights_from_flat_list(brain.actor, brain_weights)
+                            brains[creature_id] = brain
+                            response = {"status": "initialized", "id": creature_id}
+                        conn.sendall((json.dumps(response) + "\n").encode('utf-8'))
+                    elif msg_type == "evaluate":
+                        sensor_list = message.get("sensors", [])
+                        results = {}
+                        for sensor in sensor_list:
+                            creature_id = sensor.get("id")
+                            state = [
+                                sensor.get("PlantNormalizedDistance", 1.0),
+                                sensor.get("PlantAngleSin", 0.0),
+                                sensor.get("PlantAngleCos", 0.0),
+                                sensor.get("CreatureNormalizedDistance", 1.0),
+                                sensor.get("CreatureAngleSin", 0.0),
+                                sensor.get("CreatureAngleCos", 0.0),
+                                sensor.get("Hunger", 0.0)
+                            ]
+                            brain = get_brain(creature_id)
+                            state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+                            with torch.no_grad():
+                                action_tensor = brain.actor(state_tensor)
+                            action = action_tensor.squeeze(0).tolist()
+                            results[creature_id] = {
+                                "Front": action[0],
+                                "Back": action[1],
+                                "TopRight": action[2],
+                                "TopLeft": action[3],
+                                "BottomRight": action[4],
+                                "BottomLeft": action[5]
+                            }
+                        response = {"status": "evaluated", "results": results}
+                        conn.sendall((json.dumps(response) + "\n").encode('utf-8'))
+                    elif msg_type == "train":
+                        # (Keep existing training code.)
+                        training_list = message.get("training", [])
+                        train_info = {}
+                        for item in training_list:
+                            creature_id = item.get("id")
+                            brain = get_brain(creature_id)
+                            state = item.get("state")
+                            action = item.get("action")
+                            reward = item.get("reward")
+                            next_state = item.get("next_state")
+                            done = item.get("done", False)
+                            if state is not None and action is not None and reward is not None and next_state is not None:
+                                brain.replay_buffer.push(state, action, reward, next_state, done)
+                                info = []
+                                for _ in range(5):
+                                    update_info = brain.train_step()
+                                    if update_info is not None:
+                                        info.append(update_info)
+                                train_info[creature_id] = info
+                        response = {"status": "trained", "info": train_info}
+                        conn.sendall((json.dumps(response) + "\n").encode('utf-8'))
+                    else:
+                        response = {"error": "Unknown message type"}
+                        conn.sendall((json.dumps(response) + "\n").encode('utf-8'))
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    error_response = {"error": str(e)}
+                    conn.sendall((json.dumps(error_response) + "\n").encode('utf-8'))
+    except Exception as e:
+        print(f"Connection error: {e}")
+    finally:
+        print(f"Connection closed: {addr}")
+        conn.close()
     print(f"Connected by {addr}")
     buffer = ""
     try:
