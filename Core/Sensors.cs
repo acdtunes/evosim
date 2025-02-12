@@ -6,4 +6,5 @@ public record Sensors(
     float PlantAngleCos,
     float CreatureNormalizedDistance,
     float CreatureAngleSin,
-    float CreatureAngleCos);
+    float CreatureAngleCos,
+    float Hunger);

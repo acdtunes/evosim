@@ -16,7 +16,8 @@ public class Brain(int inputCount, int hiddenCount, int outputCount, float[] wei
             sensors.PlantAngleCos,
             sensors.CreatureNormalizedDistance,
             sensors.CreatureAngleSin,
-            sensors.CreatureAngleCos
+            sensors.CreatureAngleCos,
+            sensors.Hunger
         };
 
         var outputs = _network.Evaluate(inputs);
