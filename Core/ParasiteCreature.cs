@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 
 namespace EvolutionSim.Core;
@@ -38,9 +39,15 @@ public class ParasiteCreature : Creature
         }
     }
 
-    protected override (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos)
-        ReadCreatureSensors()
+    protected override VisionSensor ReadVisionSensor(Func<Creature, bool> predicate)
     {
-        return ComputeCreatureSensors(c => !c.IsParasite);
+        var worldWidth = Simulation.Parameters.World.WorldWidth;
+        var worldHeight = Simulation.Parameters.World.WorldHeight;
+        var targets = Simulation.Creatures.Values
+            .Where(c => c.Id != Id && predicate(c))
+            .Select(c => c.Position);
+        
+        return VisionSensor.FromTargets(Position, Heading, Genome.ForagingRange, worldWidth,
+            worldHeight, targets.ToArray());
     }
 }

@@ -24,6 +24,7 @@ public class Simulation
     {
         _random = random;
         Parameters = parameters;
+
         Creatures = new Dictionary<int, Creature>();
         Plants = new Dictionary<int, Plant>();
         _deadCreatures = new Dictionary<int, Creature>();

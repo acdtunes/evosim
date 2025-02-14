@@ -155,75 +155,39 @@ public abstract class Creature
     public Sensors ReadSensors()
     {
         var nearestPlant = Simulation.GetNearestPlant(Position);
-        float plantNormalizedDistance = 1;
-        float plantAngleSin = 0;
-        float plantAngleCos = 0;
-        if (nearestPlant != null)
-        {
-            var toPlant = Position.TorusDifference(
-                nearestPlant.Position,
-                Simulation.Parameters.World.WorldWidth,
-                Simulation.Parameters.World.WorldHeight);
+        var plantVisionSensor = VisionSensor.FromTargets(
+            Position,
+            Heading,
+            Genome.ForagingRange,
+            Simulation.Parameters.World.WorldWidth,
+            Simulation.Parameters.World.WorldHeight,
+            nearestPlant?.Position ?? Position
+        );
 
-            var distance = toPlant.Length();
-            plantNormalizedDistance = MathHelper.Clamp(distance / Genome.ForagingRange, 0, 1);
+        var creatureSensor = ReadVisionSensor(c => c.IsParasite);
 
-            var targetAngle = (float)Math.Atan2(toPlant.Y, toPlant.X);
-            var angleDiff = MathHelper.WrapAngle(targetAngle - Heading);
-            plantAngleSin = (float)Math.Sin(angleDiff);
-            plantAngleCos = (float)Math.Cos(angleDiff);
-        }
-
-        var (creatureNormalizedDistance, creatureAngleSin, creatureAngleCos) = ReadCreatureSensors();
-
-        var energySensor = MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
-        LastSensors = new Sensors(
-             plantNormalizedDistance, plantAngleSin, plantAngleCos,
-             creatureNormalizedDistance, creatureAngleSin, creatureAngleCos,
-             energySensor);
+        var energy = MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
+        
+        LastSensors = new Sensors(plantVisionSensor, creatureSensor, energy);
+        
         return LastSensors;
     }
 
-    protected virtual (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos)
-        ReadCreatureSensors()
+    protected virtual VisionSensor ReadVisionSensor(Func<Creature, bool> predicate)
     {
-        return ComputeCreatureSensors(c => c.IsParasite);
-    }
+        var targets = Simulation.Creatures.Values
+            .Where(c => c.Id != Id && predicate(c))
+            .Select(c => c.Position)
+            .ToArray();
 
-    protected (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos) ComputeCreatureSensors(
-        Func<Creature, bool> predicate)
-    {
-        float creatureAngleSin = 0;
-        float creatureAngleCos = 0;
-        float creatureNormalizedDistance = 1;
-        var worldWidth = Simulation.Parameters.World.WorldWidth;
-        var worldHeight = Simulation.Parameters.World.WorldHeight;
-        var avgOffset = Vector2.Zero;
-        var count = 0;
-
-        var targets = Simulation.Creatures.Values.Where(c => c.Id != Id && predicate(c));
-        foreach (var target in targets)
-        {
-            var dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
-            if (dist <= Genome.ForagingRange)
-            {
-                count++;
-                avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
-            }
-        }
-
-        if (count > 0)
-        {
-            avgOffset /= count;
-            var distanceCreature = avgOffset.Length();
-            creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / Genome.ForagingRange, 0, 1);
-            var targetCreatureAngle = (float)Math.Atan2(avgOffset.Y, avgOffset.X);
-            var angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);
-            creatureAngleSin = (float)Math.Sin(angleDiffCreature);
-            creatureAngleCos = (float)Math.Cos(angleDiffCreature);
-        }
-
-        return (creatureNormalizedDistance, creatureAngleSin, creatureAngleCos);
+        return VisionSensor.FromTargets(
+            Position,
+            Heading,
+            Genome.ForagingRange,
+            Simulation.Parameters.World.WorldWidth,
+            Simulation.Parameters.World.WorldHeight,
+            targets
+        );
     }
 
     public float CalculateJetEnergyCost(float dt)
@@ -265,19 +229,5 @@ public abstract class Creature
         PreviousEnergy = Energy;
 
         return transition;
-    }
-
-    private float[] SensorsToArray(Sensors s)
-    {
-        return new float[]
-        {
-            s.PlantNormalizedDistance,
-            s.PlantAngleSin,
-            s.PlantAngleCos,
-            s.CreatureNormalizedDistance,
-            s.CreatureAngleSin,
-            s.CreatureAngleCos,
-            s.Energy
-        };
     }
 }

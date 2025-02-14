@@ -50,20 +50,19 @@ public class BrainClient : IDisposable
             sensors.Add(new
             {
                 id = creatureId,
-                s.PlantNormalizedDistance,
-                s.PlantAngleSin,
-                s.PlantAngleCos,
-                s.CreatureNormalizedDistance,
-                s.CreatureAngleSin,
-                s.CreatureAngleCos,
+                PlantNormalizedDistance = s.PlantVisionSensor.NormalizedDistance,
+                PlantNormalizedAngleSin = s.PlantVisionSensor.NormalizedAngleSin,
+                PlantNormalizedAngleCos = s.PlantVisionSensor.NormalizedAngleCos,
+                CreatureNormalizedDistance = s.CreatureVisionSensor.NormalizedDistance,
+                CreatureNormalizedAngleSin = s.CreatureVisionSensor.NormalizedAngleSin,
+                CreatureNormalizedAngleCos = s.CreatureVisionSensor.NormalizedAngleCos,
                 s.Energy
             });
         }
 
         var batchMessage = new
         {
-            type = "evaluate",
-            sensors = sensors
+            type = "evaluate", sensors
         };
 
         var json = JsonConvert.SerializeObject(batchMessage);

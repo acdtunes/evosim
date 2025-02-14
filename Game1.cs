@@ -122,12 +122,12 @@ public class Game1 : Game
             var stats = $"Position: {_selectedCreature.Position}\n" +
                         $"Energy: {_selectedCreature.Energy:F2}\n" +
                         $"Sensors:\n" +
-                        $"  PlantNorm: {_selectedCreature.LastSensors.PlantNormalizedDistance:F2}, " +
-                        $"PlantSin: {_selectedCreature.LastSensors.PlantAngleSin:F2}, " +
-                        $"PlantCos: {_selectedCreature.LastSensors.PlantAngleCos:F2}\n" +
-                        $"  CreatureNorm: {_selectedCreature.LastSensors.CreatureNormalizedDistance:F2}, " +
-                        $"CreatureSin: {_selectedCreature.LastSensors.CreatureAngleSin:F2}, " +
-                        $"CreatureCos: {_selectedCreature.LastSensors.CreatureAngleCos:F2}\n" +
+                        $"  PlantNorm: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedDistance:F2}, " +
+                        $"PlantSin: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedAngleSin:F2}, " +
+                        $"PlantCos: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedAngleCos:F2}\n" +
+                        $"  CreatureNorm: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedDistance:F2}, " +
+                        $"CreatureSin: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedAngleSin:F2}, " +
+                        $"CreatureCos: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedAngleCos:F2}\n" +
                         $"  Energy: {_selectedCreature.LastSensors.Energy:F2}\n" +
                         $"JetForces:\n" +
                         $"  Front: {_selectedCreature.LastJetForces.Front:F2}, " +

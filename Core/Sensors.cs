@@ -1,26 +1,20 @@
-using System;
-
 namespace EvolutionSim.Core;
 
 public record Sensors(
-    float PlantNormalizedDistance,
-    float PlantAngleSin,
-    float PlantAngleCos,
-    float CreatureNormalizedDistance,
-    float CreatureAngleSin,
-    float CreatureAngleCos,
+    VisionSensor PlantVisionSensor,
+    VisionSensor CreatureVisionSensor,
     float Energy)
 {
     public float[] ToArray()
     {
-        return new float[]
+        return new[]
         {
-            PlantNormalizedDistance,
-            PlantAngleSin,
-            PlantAngleCos,
-            CreatureNormalizedDistance,
-            CreatureAngleSin,
-            CreatureAngleCos,
+            PlantVisionSensor.NormalizedDistance,
+            PlantVisionSensor.NormalizedAngleSin,
+            PlantVisionSensor.NormalizedAngleCos,
+            CreatureVisionSensor.NormalizedDistance,
+            CreatureVisionSensor.NormalizedAngleSin,
+            CreatureVisionSensor.NormalizedAngleCos,
             Energy
         };
     }
