@@ -14,7 +14,7 @@ from collections import deque, namedtuple
 STATE_DIM = 7
 ACTION_DIM = 6
 BATCH_SIZE = 64       # Per-creature mini-batch size
-GAMMA = 0.99
+GAMMA = 0.1
 TAU = 0.005           # Soft-update factor
 LR_ACTOR = 1e-3
 LR_CRITIC = 1e-3
@@ -148,7 +148,7 @@ def handle_evaluate(message):
             sensor.get("CreatureNormalizedDistance", 1.0),
             sensor.get("CreatureAngleSin", 0.0),
             sensor.get("CreatureAngleCos", 0.0),
-            sensor.get("Hunger", 0.0)
+            sensor.get("Energy", 0.0)
         ]
         brain = get_brain(creature_id)
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)

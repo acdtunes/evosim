@@ -17,7 +17,7 @@ public class Genome
     {
         { "EnergyStorage", (100f, 300f) },
         { "MetabolicRate", (0.1f, 2.0f) },
-        { "ForagingRange", (50f, 200f) },
+        { "ForagingRange", (50f, 100f) },
         { "Fullness", (0.7f, 1.0f) }
     };
 
@@ -37,7 +37,7 @@ public class Genome
         BrainWeights = new float[TotalBrainWeights];
 
         for (var i = 0; i < BrainWeights.Length; i++)
-            BrainWeights[i] = (float)((_random.NextDouble() * 2 - 1));
+            BrainWeights[i] = (float)(_random.NextDouble() * 2 - 1);
     }
 
     private Genome(float energyStorage, float metabolicRate, float foragingRange, float fullness, float mutationRate,

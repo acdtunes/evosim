@@ -6,4 +6,10 @@ public record JetForces(
     float TopRight,
     float TopLeft,
     float BottomRight,
-    float BottomLeft);
+    float BottomLeft)
+{
+    public float[] ToArray()
+    {
+        return [Front, Back, TopRight, TopLeft, BottomRight, BottomLeft];
+    }
+}

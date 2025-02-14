@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using EvolutionSim.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -10,23 +11,20 @@ namespace EvolutionSim;
 
 public class Game1 : Game
 {
+    private const float ClusterRegenInterval = 5f;
     private readonly GraphicsDeviceManager _graphics;
     private readonly SimulationParameters _parameters;
     private readonly Random _random;
-    private Texture2D _filledCircleTexture;
 
-    private Texture2D _plantTexture;
+    private float _clusterRegenTimer;
+    private Texture2D _filledCircleTexture = null!;
+
+    private Texture2D _plantTexture = null!;
     private MouseState _previousMouseState;
-    private Texture2D _reproductionTexture;
-    private Creature _selectedCreature;
+    private Creature? _selectedCreature;
 
-    private Simulation _simulation;
-    private SpriteBatch _spriteBatch;
-    private SpriteFont _spriteFont;
-
-    // NEW: Timer for plant cluster regeneration.
-    private float _clusterRegenTimer = 0f;
-    private const float CLUSTER_REGEN_INTERVAL = 5f; 
+    private Simulation _simulation = null!;
+    private SpriteBatch _spriteBatch = null!;
 
     public Game1(SimulationParameters parameters, Random random)
     {
@@ -53,7 +51,6 @@ public class Game1 : Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
         _plantTexture = CreateCircleTexture(_parameters.Render.PlantRenderRadius, Color.Green);
-        _reproductionTexture = CreateCircleTexture(_parameters.Render.CreatureRenderRadius, Color.White);
         _filledCircleTexture = CreateCircleTexture(16, Color.White);
     }
 
@@ -67,19 +64,17 @@ public class Game1 : Game
         var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _simulation.Update(dt);
 
-        // Update the cluster regeneration timer.
         _clusterRegenTimer += dt;
-        if (_clusterRegenTimer >= CLUSTER_REGEN_INTERVAL &&
+        if (_clusterRegenTimer >= ClusterRegenInterval &&
             _simulation.Plants.Count < _parameters.Population.GlobalMaxPlantCount)
         {
-            SpawnPlantCluster();
+            PlantClusterSpawner.SpawnCluster(_simulation, _random);
             _clusterRegenTimer = 0f;
         }
 
         base.Update(gameTime);
     }
 
-    // NEW: Extracted method to handle mouse clicks for creature selection.
     private void HandleMouseClick()
     {
         var currentMouseState = Mouse.GetState();
@@ -87,15 +82,10 @@ public class Game1 : Game
             _previousMouseState.LeftButton == ButtonState.Released)
         {
             var mousePos = new Vector2(currentMouseState.X, currentMouseState.Y);
-            foreach (var creature in _simulation.Creatures.Values)
-            {
-                if (Vector2.Distance(mousePos, creature.Position) < 10f)
-                {
-                    _selectedCreature = creature;
-                    break;
-                }
-            }
+            var nearCreatures = _simulation.GetNearbyCreatures(mousePos, 10f);
+            _selectedCreature = nearCreatures.FirstOrDefault();
         }
+
         _previousMouseState = currentMouseState;
     }
 
@@ -104,7 +94,7 @@ public class Game1 : Game
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
         _spriteBatch.Begin();
-        
+
         foreach (var creature in _simulation.Creatures.Values)
         {
             var color = creature.IsParasite ? Color.Red : Color.Yellow;
@@ -138,7 +128,7 @@ public class Game1 : Game
                         $"  CreatureNorm: {_selectedCreature.LastSensors.CreatureNormalizedDistance:F2}, " +
                         $"CreatureSin: {_selectedCreature.LastSensors.CreatureAngleSin:F2}, " +
                         $"CreatureCos: {_selectedCreature.LastSensors.CreatureAngleCos:F2}\n" +
-                        $"  Hunger: {_selectedCreature.LastSensors.Hunger:F2}\n" +
+                        $"  Energy: {_selectedCreature.LastSensors.Energy:F2}\n" +
                         $"JetForces:\n" +
                         $"  Front: {_selectedCreature.LastJetForces.Front:F2}, " +
                         $"Back: {_selectedCreature.LastJetForces.Back:F2}\n" +
@@ -154,33 +144,30 @@ public class Game1 : Game
         base.Draw(gameTime);
     }
 
-    // NEW: Helper method to draw "rod"–shaped creatures.
     private void DrawRodCreature(Creature creature, Color color)
     {
-        var W = creature.Size / 3f;
-        var H = creature.Size;
-        var radius = W / 2f;
+        var width = creature.Size / 3f;
+        var height = creature.Size;
+        var radius = width / 2f;
         var transform = Matrix.CreateRotationZ(creature.Heading + MathHelper.PiOver2) *
                         Matrix.CreateTranslation(creature.Position.X, creature.Position.Y, 0);
 
         _spriteBatch.End();
         _spriteBatch.Begin(transformMatrix: transform);
 
-        // Draw the central rectangle (the capsule body).
         _spriteBatch.FillRectangle(
-            new RectangleF(-W / 2f, -H / 2f + radius, W, H - W),
+            new RectangleF(-width / 2f, -height / 2f + radius, width, height - width),
             color);
 
-        var circleScale = W / _filledCircleTexture.Width;
+        var circleScale = width / _filledCircleTexture.Width;
         var circleOrigin = new Vector2(_filledCircleTexture.Width / 2f, _filledCircleTexture.Height / 2f);
 
-        // Draw the top cap.
         _spriteBatch.Draw(_filledCircleTexture,
-            new Vector2(0, -H / 2f + radius),
+            new Vector2(0, -height / 2f + radius),
             null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
-        // Draw the bottom cap.
+
         _spriteBatch.Draw(_filledCircleTexture,
-            new Vector2(0, H / 2f - radius),
+            new Vector2(0, height / 2f - radius),
             null, color, 0f, circleOrigin, circleScale, SpriteEffects.None, 0f);
 
         _spriteBatch.End();
@@ -204,31 +191,5 @@ public class Game1 : Game
 
         texture.SetData(colorData);
         return texture;
-    }
-
-    // NEW: Method to spawn a new plant cluster.
-    private void SpawnPlantCluster()
-    {
-        // Determine a random center for the new cluster.
-        var clusterCenter = new Vector2(
-            _random.Next(_parameters.World.WorldWidth),
-            _random.Next(_parameters.World.WorldHeight)
-        );
-
-        // Choose a random number of plants for this cluster (up to the maximum defined in our parameters).
-        int plantCount = _random.Next(1, _parameters.Population.MaxPlantsPerCluster + 1);
-        float clusterRadius = _parameters.Population.InitialPlantClusterRadius;
-
-        for (int i = 0; i < plantCount; i++)
-        {
-            var angle = (float)(_random.NextDouble() * MathHelper.TwoPi);
-            var distance = (float)(_random.NextDouble() * clusterRadius);
-            var offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
-            var pos = clusterCenter + offset;
-            pos.X = (pos.X % _parameters.World.WorldWidth + _parameters.World.WorldWidth) % _parameters.World.WorldWidth;
-            pos.Y = (pos.Y % _parameters.World.WorldHeight + _parameters.World.WorldHeight) % _parameters.World.WorldHeight;
-            var plant = new Plant(pos, _random, _simulation);
-            _simulation.AddPlant(plant);
-        }
     }
 }

@@ -1,0 +1,33 @@
+LearningEnabled: true
+World:
+  WorldWidth: 1200
+  WorldHeight: 800
+MutationRate: 0.03
+SimulationSpeed: 3
+Population:
+  InitialCreatureCount: 50
+  InitialParasiteCount: 100
+  InitialPlantClusters: 20
+  MaxPlantsPerCluster: 15
+  GlobalMaxPlantCount: 500
+  InitialPlantClusterRadius: 10.0
+Creature:
+  MovementEnergyCostFactor: 0.005
+  ReproductionEnergyThreshold: 75
+  DragCoefficient: 0.1
+  AngularDragCoefficient: 0.0
+  ReproductionProbability: 0.003
+Plant:
+  EnergyGain: 12.0
+  ReproductionProbability: 0.02
+  SeedMaturityThreshold: 5.0
+  SeedDispersalProbability: 0.001
+  SeedDispersalRadius: 50.0
+Physics:
+  LinearForceScaling: 100.0
+  AngularForceScaling: 100.0
+  LinearDragCoefficient: 0.5
+  TorqueDragCoefficient: 100
+  JetCooldown: 2
+Render:
+  PlantRenderRadius: 1

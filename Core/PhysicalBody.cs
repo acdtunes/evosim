@@ -6,13 +6,14 @@ namespace EvolutionSim.Core;
 public class PhysicalBody
 {
     private readonly float _angularDragCoefficient;
-
-    private readonly float _linearForceScaling;
     private readonly float _jetCooldown;
     private readonly float _linearDragCoefficient;
+
+    private readonly float _linearForceScaling;
     private readonly Random _random;
 
     private readonly float _size;
+    private readonly float _torqueForceScaling;
     private float _backJetCooldownTimer;
     private float _bottomLeftJetCooldownTimer;
     private float _bottomRightJetCooldownTimer;
@@ -23,7 +24,6 @@ public class PhysicalBody
     private float _inputTorque;
     private float _topLeftJetCooldownTimer;
     private float _topRightJetCooldownTimer;
-    private readonly float _torqueForceScaling;
 
     public PhysicalBody(Vector2 position, float heading, float mass, float size, BodyShape shape, Random random,
         SimulationParameters parameters)
@@ -90,13 +90,13 @@ public class PhysicalBody
         const float minActivation = 0.01f;
 
         var backThrust = forces.Back >= minActivation && _backJetCooldownTimer <= 0f
-            ? forces.Back * _linearForceScaling
+            ? forces.Back * _linearForceScaling * 1000
             : 0f;
         if (backThrust > 0f)
             _backJetCooldownTimer = _jetCooldown;
 
         var frontThrust = forces.Front >= minActivation && _frontJetCooldownTimer <= 0f
-            ? forces.Front * _linearForceScaling
+            ? forces.Front * _linearForceScaling * 100
             : 0f;
         if (frontThrust > 0f)
             _frontJetCooldownTimer = _jetCooldown;

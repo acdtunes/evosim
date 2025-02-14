@@ -1,5 +1,3 @@
-// In ParasiteCreature.cs
-
 using System;
 using Microsoft.Xna.Framework;
 
@@ -7,38 +5,42 @@ namespace EvolutionSim.Core;
 
 public class ParasiteCreature : Creature
 {
-    // Existing constructor:
     public ParasiteCreature(Vector2 position, Random random, Simulation simulation)
         : base(position, 10f, 3f, random, simulation)
-    { }
+    {
+    }
 
-    // New constructor for offspring:
     public ParasiteCreature(Vector2 position, Random random, Simulation simulation, Genome genome)
         : base(position, 10f, 3f, random, simulation, genome)
-    { }
+    {
+    }
 
     public override bool IsParasite => true;
 
     public override void Update(float dt, JetForces forces)
     {
         base.Update(dt, forces);
-        foreach (var other in _simulation.Creatures.Values)
+        foreach (var other in Simulation.GetNearbyCreatures<ParasiteCreature>(Position, Size * 1.5f, Id))
         {
-            if (other == this || other.IsParasite)
-                continue;
-            float collisionDistance = (this.Size + other.Size) / 2f;
-            if (Vector2.Distance(this.Position, other.Position) < collisionDistance)
+            var collisionDistance = (Size + other.Size) / 2f;
+            if (Vector2.Distance(Position, other.Position) < collisionDistance)
             {
-                float drainAmount = 100f * dt;
-                float actualDrain = Math.Min(other.Energy, drainAmount);
+                var drainAmount = 20 * dt;
+                var actualDrain = Math.Min(other.Energy, drainAmount);
                 if (actualDrain > 0 && Energy < Genome.Fullness * Genome.EnergyStorage)
                 {
                     Energy += actualDrain;
                     other.Energy -= actualDrain;
-                    this.ParasiteEnergyDelta += actualDrain;
+                    ParasiteEnergyDelta += actualDrain;
                     other.ParasiteEnergyDelta -= actualDrain;
                 }
             }
         }
+    }
+
+    protected override (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos)
+        ReadCreatureSensors()
+    {
+        return ComputeCreatureSensors(c => !c.IsParasite);
     }
 }

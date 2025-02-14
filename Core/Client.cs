@@ -6,155 +6,152 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace EvolutionSim.Core
+namespace EvolutionSim.Core;
+
+public class BrainTransition
 {
-    public class TransitionData
+    public int Id { get; set; }
+    public float[] State { get; set; } = null!;
+    public float[] Action { get; set; } = null!;
+    public float Reward { get; set; }
+    public float[] NextState { get; set; } = null!;
+    public bool Done { get; set; }
+}
+
+public class BrainClient : IDisposable
+{
+    private readonly StreamReader _reader;
+    private readonly SemaphoreSlim _requestLock = new(1, 1);
+    private readonly TcpClient _tcpClient;
+    private readonly StreamWriter _writer;
+
+    public BrainClient(string host, int port)
     {
-        public int Id { get; set; }
-        public float[] State { get; set; }      // 7–element sensor state
-        public float[] Action { get; set; }     // 6–element jet–force action
-        public float Reward { get; set; }
-        public float[] NextState { get; set; }  // 7–element sensor state after update
-        public bool Done { get; set; }
+        _tcpClient = new TcpClient(host, port);
+        var stream = _tcpClient.GetStream();
+        _reader = new StreamReader(stream);
+        _writer = new StreamWriter(stream) { AutoFlush = true };
     }
-    
-    public class BrainClient : IDisposable
+
+    public void Dispose()
     {
-        private readonly TcpClient _tcpClient;
-        private readonly StreamReader _reader;
-        private readonly StreamWriter _writer;
-        // Lock to serialize read/write operations.
-        private readonly SemaphoreSlim _requestLock = new SemaphoreSlim(1, 1);
+        _reader?.Dispose();
+        _writer?.Dispose();
+        _tcpClient?.Close();
+    }
 
-        public BrainClient(string host, int port)
+    public async Task<Dictionary<int, JetForces>> EvaluateBrainsAsync(Dictionary<int, Sensors> sensorBatch)
+    {
+        var sensors = new List<object>();
+        foreach (var kvp in sensorBatch)
         {
-            _tcpClient = new TcpClient(host, port);
-            var stream = _tcpClient.GetStream();
-            _reader = new StreamReader(stream);
-            _writer = new StreamWriter(stream) { AutoFlush = true };
-        }
-
-        public async Task<Dictionary<int, JetForces>> EvaluateBrainsAsync(Dictionary<int, Sensors> sensorBatch)
-        {
-            var sensorList = new List<object>();
-            foreach (var kvp in sensorBatch)
+            var creatureId = kvp.Key;
+            var s = kvp.Value;
+            sensors.Add(new
             {
-                int creatureId = kvp.Key;
-                Sensors s = kvp.Value;
-                sensorList.Add(new
-                {
-                    id = creatureId,
-                    s.PlantNormalizedDistance,
-                    s.PlantAngleSin,
-                    s.PlantAngleCos,
-                    s.CreatureNormalizedDistance,
-                    s.CreatureAngleSin,
-                    s.CreatureAngleCos,
-                    s.Hunger
-                });
-            }
-
-            var batchMessage = new
-            {
-                type = "evaluate",
-                sensors = sensorList
-            };
-
-            string json = JsonConvert.SerializeObject(batchMessage);
-
-            await _requestLock.WaitAsync();
-            try
-            {
-                await _writer.WriteLineAsync(json);
-                string responseLine = await _reader.ReadLineAsync();
-                if (string.IsNullOrEmpty(responseLine))
-                    throw new Exception("Received empty response from RL server during evaluation.");
-
-                var responseObj = JsonConvert.DeserializeObject<EvaluationResponse>(responseLine);
-                if (responseObj.results == null)
-                    throw new Exception("Invalid response from server: " + responseLine);
-
-                return responseObj.results;
-            }
-            finally
-            {
-                _requestLock.Release();
-            }
-        }
-        
-        public async Task InitBrainAsync(int creatureId, float[] brainWeights)
-        {
-            var initMessage = new
-            {
-                type = "init",
                 id = creatureId,
-                brain_weights = brainWeights
-            };
-
-            string json = JsonConvert.SerializeObject(initMessage);
-
-            await _requestLock.WaitAsync();
-            try
-            {
-                await _writer.WriteLineAsync(json);
-                string responseLine = await _reader.ReadLineAsync();
-                // Optionally, you can verify that the response indicates successful initialization.
-            }
-            finally
-            {
-                _requestLock.Release();
-            }
+                s.PlantNormalizedDistance,
+                s.PlantAngleSin,
+                s.PlantAngleCos,
+                s.CreatureNormalizedDistance,
+                s.CreatureAngleSin,
+                s.CreatureAngleCos,
+                s.Energy
+            });
         }
 
-        public async Task<Dictionary<int, object>> TrainBrainsAsync(List<TransitionData> trainingData)
+        var batchMessage = new
         {
-            var batchMessage = new
-            {
-                type = "train",
-                training = trainingData
-            };
+            type = "evaluate",
+            sensors = sensors
+        };
 
-            string json = JsonConvert.SerializeObject(batchMessage);
+        var json = JsonConvert.SerializeObject(batchMessage);
 
-            await _requestLock.WaitAsync();
-            try
-            {
-                await _writer.WriteLineAsync(json);
-                string responseLine = await _reader.ReadLineAsync();
-                if (string.IsNullOrEmpty(responseLine))
-                    throw new Exception("Received empty response from RL server during training.");
-
-                var responseObj = JsonConvert.DeserializeObject<TrainResponse>(responseLine);
-                if (responseObj.info == null)
-                    throw new Exception("Invalid response from server: " + responseLine);
-
-                return responseObj.info;
-            }
-            finally
-            {
-                _requestLock.Release();
-            }
-        }
-
-        public void Dispose()
+        await _requestLock.WaitAsync();
+        try
         {
-            _reader?.Dispose();
-            _writer?.Dispose();
-            _tcpClient?.Close();
-        }
+            await _writer.WriteLineAsync(json);
+            var responseLine = await _reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(responseLine))
+                throw new Exception("Received empty response from RL server during evaluation.");
 
-        private class EvaluationResponse
-        {
-            public string status { get; set; }
-            public Dictionary<int, JetForces> results { get; set; }
-            public string error { get; set; }
-        }
+            var responseObj = JsonConvert.DeserializeObject<EvaluationResponse>(responseLine);
+            if (responseObj.results == null)
+                throw new Exception("Invalid response from server: " + responseLine);
 
-        private class TrainResponse
-        {
-            public string status { get; set; }
-            public Dictionary<int, object> info { get; set; }
-            public string error { get; set; }
+            return responseObj.results;
         }
+        finally
+        {
+            _requestLock.Release();
+        }
+    }
+
+    public async Task InitBrainAsync(int creatureId, float[] brainWeights)
+    {
+        var initMessage = new
+        {
+            type = "init",
+            id = creatureId,
+            brain_weights = brainWeights
+        };
+
+        var json = JsonConvert.SerializeObject(initMessage);
+
+        await _requestLock.WaitAsync();
+        try
+        {
+            await _writer.WriteLineAsync(json);
+            var responseLine = await _reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(responseLine))
+                throw new Exception("Received empty response from RL server during brain initialization.");
+        }
+        finally
+        {
+            _requestLock.Release();
+        }
+    }
+
+    public async Task TrainBrainsAsync(List<BrainTransition> trainingData)
+    {
+        var batchMessage = new
+        {
+            type = "train",
+            training = trainingData
+        };
+
+        var json = JsonConvert.SerializeObject(batchMessage);
+
+        await _requestLock.WaitAsync();
+        try
+        {
+            await _writer.WriteLineAsync(json);
+            var responseLine = await _reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(responseLine))
+                throw new Exception("Received empty response from RL server during training.");
+
+            var responseObj = JsonConvert.DeserializeObject<TrainResponse>(responseLine);
+            if (responseObj?.info == null)
+                throw new Exception("Invalid response from server: " + responseLine);
+        }
+        finally
+        {
+            _requestLock.Release();
+        }
+    }
+
+    private class EvaluationResponse
+    {
+        public string status { get; set; }
+        public Dictionary<int, JetForces> results { get; set; }
+        public string error { get; set; }
+    }
+
+    private class TrainResponse
+    {
+        public string status { get; set; }
+        public Dictionary<int, object> info { get; set; }
+        public string error { get; set; }
     }
 }

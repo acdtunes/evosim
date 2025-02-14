@@ -12,11 +12,11 @@ public class Plant(Vector2 position, Random random, Simulation simulation)
     {
         double reproductionProbability = simulation.Parameters.Plant.ReproductionProbability;
         if (random.NextDouble() < reproductionProbability * dt)
-        {
             if (simulation.Plants.Count < simulation.Parameters.Population.GlobalMaxPlantCount)
             {
                 var angle = (float)(random.NextDouble() * MathHelper.TwoPi);
-                var distance = (float)(random.NextDouble() * simulation.Parameters.Population.InitialPlantClusterRadius);
+                var distance =
+                    (float)(random.NextDouble() * simulation.Parameters.Population.InitialPlantClusterRadius);
                 var offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * distance;
                 var newPlantPos = Position + offset;
                 newPlantPos.X = MathHelper.Clamp(newPlantPos.X, 0, simulation.Parameters.World.WorldWidth);
@@ -24,6 +24,5 @@ public class Plant(Vector2 position, Random random, Simulation simulation)
                 var newPlant = new Plant(newPlantPos, random, simulation);
                 simulation.AddPlant(newPlant);
             }
-        }
     }
 }

@@ -1,286 +1,283 @@
 using System;
-using Microsoft.Xna.Framework;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Xna.Framework;
 
-namespace EvolutionSim.Core
+namespace EvolutionSim.Core;
+
+public abstract class Creature
 {
-    public abstract class Creature
+    private readonly Jet _backJet;
+    private readonly Jet _bottomLeftJet;
+    private readonly Jet _bottomRightJet;
+    private readonly Jet _frontJet;
+    private readonly PhysicalBody _physical;
+    private readonly Random _random;
+    private readonly Jet _topLeftJet;
+    private readonly Jet _topRightJet;
+    protected readonly Simulation Simulation;
+
+    protected Creature(Vector2 position, float size, float mass, Random random, Simulation simulation,
+        Genome? genome = null)
     {
-        public Genome Genome { get; set; }
-        private readonly PhysicalBody _physical;
-        private readonly Random _random;
-        protected readonly Simulation _simulation;
-        private float _backJetTimer;
-        private float _bottomLeftJetTimer;
-        private float _bottomRightJetTimer;
-        private float _cachedBack;
-        private float _cachedBottomLeft;
-        private float _cachedBottomRight;
-        private float _cachedFront;
-        private float _cachedTopLeft;
-        private float _cachedTopRight;
-        private float _frontJetTimer;
-        private float _topLeftJetTimer;
-        private float _topRightJetTimer;
-        
-        public float ParasiteEnergyDelta { get; set; }
+        Id = simulation.GetNextCreatureId();
+        Size = size;
+        Mass = mass;
+        _random = random;
+        Simulation = simulation;
+        Genome = genome ?? new Genome(random, simulation.Parameters.MutationRate);
+        var heading = (float)(_random.NextDouble() * MathHelper.TwoPi);
+        _physical = new PhysicalBody(position, heading, mass, size, BodyShape.Rod, random, simulation.Parameters);
+        Energy = 100f;
 
-        public virtual bool IsParasite => false;
+        const float turningCostFactor = 50f;
 
-        public Creature(Vector2 position, float size, float mass, Random random, Simulation simulation, Genome? genome = null)
+        _frontJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, 1f);
+        _backJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, 1f);
+        _topRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+        _topLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+        _bottomRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+        _bottomLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+
+        Task.Run(async () => await InitializeBrain());
+        LastSensors = ReadSensors();
+        PreviousSensors = LastSensors;
+        PreviousEnergy = Energy;
+    }
+
+    public Genome Genome { get; set; }
+
+    public float ParasiteEnergyDelta { get; set; }
+
+    public virtual bool IsParasite => false;
+
+    public int Id { get; }
+    public float Energy { get; set; }
+
+    public Vector2 Position => _physical.Position;
+    public float Heading => _physical.Heading;
+    public BodyShape BodyShape => _physical.Shape;
+
+    public float AngularVelocity => _physical.AngularVelocity;
+    public float Mass { get; }
+    public float Size { get; }
+    public float Age { get; private set; }
+
+    public Sensors LastSensors { get; private set; }
+
+    public JetForces LastJetForces => new(
+        _frontJet.LastForce, _backJet.LastForce,
+        _topRightJet.LastForce, _topLeftJet.LastForce,
+        _bottomRightJet.LastForce, _bottomLeftJet.LastForce);
+
+    public Sensors PreviousSensors { get; set; }
+    public float PreviousEnergy { get; set; }
+
+    private async Task InitializeBrain()
+    {
+        try
         {
-            Id = simulation.GetNextCreatureId();
-            Size = size;
-            Mass = mass;
-            _random = random;
-            _simulation = simulation;
-            Genome = genome ?? new Genome(random, simulation.Parameters.MutationRate);
-            var heading = (float)(_random.NextDouble() * MathHelper.TwoPi);
-            _physical = new PhysicalBody(position, heading, mass, size, BodyShape.Rod, random, simulation.Parameters);
-            Energy = 100f;
-
-            InitializeJetTimers(simulation);
-            LastJetForces = new JetForces(0f, 0f, 0f, 0f, 0f, 0f);
-            LastSensors = ReadSensors();
-            PreviousSensors = LastSensors;
-            PreviousEnergy = Energy;
+            await Simulation.Client.InitBrainAsync(Id, Genome.BrainWeights);
         }
-        
-        public int Id { get; }
-        public float Energy { get; set; }
-
-        public Vector2 Position => _physical.Position;
-        public float Heading => _physical.Heading;
-        public BodyShape BodyShape => _physical.Shape;
-        
-        public float AngularVelocity => _physical.AngularVelocity;
-        public float Mass { get; }
-        public float Size { get; }
-        public float Age { get; private set; }
-
-        // For debugging/display purposes.
-        public Sensors LastSensors { get; private set; }
-        public JetForces LastJetForces { get; private set; }
-
-        public Sensors PreviousSensors { get; set; }
-        public float PreviousEnergy { get; set; }
-
-        private void InitializeJetTimers(Simulation simulation)
+        catch (Exception ex)
         {
-            _frontJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
-            _backJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
-            _topRightJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
-            _topLeftJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
-            _bottomRightJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
-            _bottomLeftJetTimer = (float)_random.NextDouble() * simulation.Parameters.Physics.JetCooldown;
+            Console.WriteLine("Error initializing brain for creature " + Id + ": " + ex.Message);
         }
+    }
 
-        public virtual void Update(float dt, JetForces forces)
+    public virtual void Update(float dt, JetForces forces)
+    {
+        ParasiteEnergyDelta = 0;
+
+        Age += dt;
+
+        UpdateJetForces(dt, forces);
+
+        var totalJetEnergyCost = CalculateJetEnergyCost(dt);
+        Energy -= totalJetEnergyCost;
+
+        _physical.ApplyJetForces(LastJetForces);
+        _physical.Update(dt);
+
+        if (!IsParasite)
+            CheckForPlantCollision();
+
+        LastSensors = ReadSensors();
+
+        var reproductionProbability = Simulation.Parameters.Creature.ReproductionProbability;
+        if (Energy >= Simulation.Parameters.Creature.ReproductionEnergyThreshold &&
+            _random.NextDouble() < reproductionProbability * dt) Reproduce();
+        if (Energy <= 0) Simulation.KillCreature(this);
+    }
+
+    private void UpdateJetForces(float dt, JetForces forces)
+    {
+        _frontJet.Update(dt, forces.Front);
+        //_backJet.Update(dt, forces.Back);
+        _topRightJet.Update(dt, forces.TopRight);
+        _topLeftJet.Update(dt, forces.TopLeft);
+        //_bottomRightJet.Update(dt, forces.BottomRight);
+        //_bottomLeftJet.Update(dt, forces.BottomLeft);
+    }
+
+    protected virtual void Reproduce()
+    {
+        var offspringGenome = Genome.Mutate();
+
+        var offspringEnergy = Energy / 2;
+        Energy /= 2;
+
+        var offset = new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * Size;
+        var offspringPosition = Position + offset;
+
+        Creature offspring;
+        if (this is ParasiteCreature)
+            offspring = new ParasiteCreature(offspringPosition, _random, Simulation, offspringGenome);
+        else
+            offspring = new SimpleCreature(offspringPosition, Size, Mass, _random, Simulation, offspringGenome);
+        offspring.Energy = offspringEnergy;
+        Simulation.AddCreature(offspring);
+
+        Task.Run(async () => await offspring.InitializeBrain());
+    }
+
+    private void CheckForPlantCollision()
+    {
+        var eatingRadius = Size / 2;
+        var plant = Simulation.GetPlantAtPosition(Position, eatingRadius);
+        if (plant != null && Energy < Genome.Fullness * Genome.EnergyStorage)
         {
-            ParasiteEnergyDelta = 0;
-            
-            Age += dt;
-
-            UpdateJetTimers(dt, forces);
-
-            LastJetForces = new JetForces(
-                _cachedFront, _cachedBack, _cachedTopRight, _cachedTopLeft, _cachedBottomRight, _cachedBottomLeft);
-
-            Energy -= CalculateJetEnergyCost(dt);
-
-            _physical.ApplyJetForces(LastJetForces);
-            _physical.Update(dt);
-
-            if (!IsParasite)
-                CheckForPlantCollision();;
-
-            LastSensors = ReadSensors();
-
-            var reproductionProbability = 0.01;
-            if (Energy >= _simulation.Parameters.Creature.ReproductionEnergyThreshold && _random.NextDouble() < reproductionProbability * dt)
-            {
-                Reproduce();
-            }
-            if (Energy <= 0)
-            {
-                _simulation.KillCreature(this);
-            }
+            Energy = Math.Min(Energy + Simulation.Parameters.Plant.EnergyGain, Genome.EnergyStorage);
+            Simulation.KillPlant(plant);
         }
-        
-        protected virtual void Reproduce()
+    }
+
+    public Sensors ReadSensors()
+    {
+        var nearestPlant = Simulation.GetNearestPlant(Position);
+        float plantNormalizedDistance = 1;
+        float plantAngleSin = 0;
+        float plantAngleCos = 0;
+        if (nearestPlant != null)
         {
-            // Create a mutated copy of the genome (which includes brain weights)
-            var offspringGenome = Genome.Mutate();
+            var toPlant = Position.TorusDifference(
+                nearestPlant.Position,
+                Simulation.Parameters.World.WorldWidth,
+                Simulation.Parameters.World.WorldHeight);
 
-            // Deduct half of the parent's energy and assign it to the offspring.
-            float offspringEnergy = Energy / 2;
-            Energy /= 2;
+            var distance = toPlant.Length();
+            plantNormalizedDistance = MathHelper.Clamp(distance / Genome.ForagingRange, 0, 1);
 
-            // Place the offspring near the parent (using a small random offset)
-            var offset = new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * Size;
-            var offspringPosition = Position + offset;
-
-            Creature offspring;
-            if (this is ParasiteCreature)
-            {
-                offspring = new ParasiteCreature(offspringPosition, _random, _simulation, offspringGenome);
-            }
-            else
-            {
-                offspring = new SimpleCreature(offspringPosition, Size, Mass, _random, _simulation, offspringGenome);
-            }
-            offspring.Energy = offspringEnergy;
-            _simulation.AddCreature(offspring);
-
-            Task.Run(async () => await _simulation.InitializeBrainForCreature(offspring));
-        }
-
-        private void UpdateJetTimers(float dt, JetForces forces)
-        {
-            _frontJetTimer -= dt;
-            if (_frontJetTimer <= 0f)
-            {
-                _frontJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedFront = forces.Front;
-            }
-
-            _backJetTimer -= dt;
-            if (_backJetTimer <= 0f)
-            {
-                _backJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedBack = forces.Back;
-            }
-
-            _topRightJetTimer -= dt;
-            if (_topRightJetTimer <= 0f)
-            {
-                _topRightJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedTopRight = forces.TopRight;
-            }
-
-            _topLeftJetTimer -= dt;
-            if (_topLeftJetTimer <= 0f)
-            {
-                _topLeftJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedTopLeft = forces.TopLeft;
-            }
-
-            _bottomRightJetTimer -= dt;
-            if (_bottomRightJetTimer <= 0f)
-            {
-                _bottomRightJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedBottomRight = forces.BottomRight;
-            }
-
-            _bottomLeftJetTimer -= dt;
-            if (_bottomLeftJetTimer <= 0f)
-            {
-                _bottomLeftJetTimer = _simulation.Parameters.Physics.JetCooldown;
-                _cachedBottomLeft = forces.BottomLeft;
-            }
+            var targetAngle = (float)Math.Atan2(toPlant.Y, toPlant.X);
+            var angleDiff = MathHelper.WrapAngle(targetAngle - Heading);
+            plantAngleSin = (float)Math.Sin(angleDiff);
+            plantAngleCos = (float)Math.Cos(angleDiff);
         }
 
-        public float CalculateJetEnergyCost(float dt)
-        {
-            var forces = LastJetForces;
-            var costFactor = _simulation.Parameters.Creature.MovementEnergyCostFactor;
-            var turningCostFactor = 50f;
-            return (forces.Front + forces.Back +
-                    forces.TopRight*turningCostFactor + forces.TopLeft*turningCostFactor +
-                    forces.BottomRight*turningCostFactor + forces.BottomLeft*turningCostFactor) * costFactor * dt;
-        }
+        var (creatureNormalizedDistance, creatureAngleSin, creatureAngleCos) = ReadCreatureSensors();
 
-        private void CheckForPlantCollision()
+        var energySensor = MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
+        LastSensors = new Sensors(
+             plantNormalizedDistance, plantAngleSin, plantAngleCos,
+             creatureNormalizedDistance, creatureAngleSin, creatureAngleCos,
+             energySensor);
+        return LastSensors;
+    }
+
+    protected virtual (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos)
+        ReadCreatureSensors()
+    {
+        return ComputeCreatureSensors(c => c.IsParasite);
+    }
+
+    protected (float creatureNormalizedDistance, float creatureAngleSin, float creatureAngleCos) ComputeCreatureSensors(
+        Func<Creature, bool> predicate)
+    {
+        float creatureAngleSin = 0;
+        float creatureAngleCos = 0;
+        float creatureNormalizedDistance = 1;
+        var worldWidth = Simulation.Parameters.World.WorldWidth;
+        var worldHeight = Simulation.Parameters.World.WorldHeight;
+        var avgOffset = Vector2.Zero;
+        var count = 0;
+
+        var targets = Simulation.Creatures.Values.Where(c => c.Id != Id && predicate(c));
+        foreach (var target in targets)
         {
-            var eatingRadius = Size / 2;
-            var plant = _simulation.GetPlantAtPosition(Position, eatingRadius);
-            if (plant != null && Energy < Genome.Fullness * Genome.EnergyStorage)
+            var dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
+            if (dist <= Genome.ForagingRange)
             {
-                Energy = Math.Min(Energy + _simulation.Parameters.Plant.EnergyGain, Genome.EnergyStorage);
-                _simulation.KillPlant(plant);
+                count++;
+                avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
             }
         }
 
-        public Sensors ReadSensors()
+        if (count > 0)
         {
-            var nearestPlant = _simulation.GetNearestPlant(Position);
-            float plantAngleSin = 0;
-            float plantAngleCos = 0;
-            float plantNormalizedDistance = 1;
-            if (nearestPlant != null)
-            {
-                var toPlant = Position.TorusDifference(
-                    nearestPlant.Position,
-                    _simulation.Parameters.World.WorldWidth,
-                    _simulation.Parameters.World.WorldHeight);
-                var distance = toPlant.Length();
-                plantNormalizedDistance = MathHelper.Clamp(distance / Genome.ForagingRange, 0, 1);
-
-                var targetAngle = (float)Math.Atan2(toPlant.Y, toPlant.X);
-                var angleDiff = MathHelper.WrapAngle(targetAngle - Heading);
-                plantAngleSin = (float)Math.Sin(angleDiff);
-                plantAngleCos = (float)Math.Cos(angleDiff);
-            }
-
-            float creatureAngleSin = 0;
-            float creatureAngleCos = 0;
-            float creatureNormalizedDistance = 1;
-            var worldWidth = _simulation.Parameters.World.WorldWidth;
-            var worldHeight = _simulation.Parameters.World.WorldHeight;
-            Vector2 avgOffset = Vector2.Zero;
-            int count = 0;
-            if (IsParasite)
-            {
-                // Consider all non-parasite creatures.
-                var targets = _simulation.Creatures.Values.Where(c => c.Id != this.Id && !c.IsParasite);
-                foreach (var target in targets)
-                {
-                    float dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
-                    if (dist <= Genome.ForagingRange)
-                    {
-                        count++;
-                        avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
-                    }
-                }
-
-                plantNormalizedDistance = 1;
-            }
-            else
-            {
-                // Consider all parasite creatures.
-                var targets = _simulation.Creatures.Values.Where(c => c.Id != this.Id && c.IsParasite);
-                foreach (var target in targets)
-                {
-                    float dist = Position.TorusDistance(target.Position, worldWidth, worldHeight);
-                    if (dist <= Genome.ForagingRange)
-                    {
-                        count++;
-                        avgOffset += Position.TorusDifference(target.Position, worldWidth, worldHeight);
-                    }
-                }
-            }
-
-            if (count > 0)
-            {
-                avgOffset /= count;
-                float distanceCreature = avgOffset.Length();
-                creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / Genome.ForagingRange, 0, 1);
-                float targetCreatureAngle = (float)Math.Atan2(avgOffset.Y, avgOffset.X);
-                float angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);
-                creatureAngleSin = (float)Math.Sin(angleDiffCreature);
-                creatureAngleCos = (float)Math.Cos(angleDiffCreature);
-            }
-
-            var hungerSensor = 1 - MathHelper.Clamp(Energy / 100f, 0, 1);
-
-            LastSensors = new Sensors(
-                plantNormalizedDistance, plantAngleSin, plantAngleCos,
-                creatureNormalizedDistance, creatureAngleSin, creatureAngleCos,
-                hungerSensor
-            );
-
-            return LastSensors;
+            avgOffset /= count;
+            var distanceCreature = avgOffset.Length();
+            creatureNormalizedDistance = MathHelper.Clamp(distanceCreature / Genome.ForagingRange, 0, 1);
+            var targetCreatureAngle = (float)Math.Atan2(avgOffset.Y, avgOffset.X);
+            var angleDiffCreature = MathHelper.WrapAngle(targetCreatureAngle - Heading);
+            creatureAngleSin = (float)Math.Sin(angleDiffCreature);
+            creatureAngleCos = (float)Math.Cos(angleDiffCreature);
         }
+
+        return (creatureNormalizedDistance, creatureAngleSin, creatureAngleCos);
+    }
+
+    public float CalculateJetEnergyCost(float dt)
+    {
+        var costFactor = Simulation.Parameters.Creature.MovementEnergyCostFactor;
+        return _frontJet.CalculateEnergyCost(dt, costFactor) +
+               _backJet.CalculateEnergyCost(dt, costFactor) +
+               _topRightJet.CalculateEnergyCost(dt, costFactor) +
+               _topLeftJet.CalculateEnergyCost(dt, costFactor) +
+               _bottomRightJet.CalculateEnergyCost(dt, costFactor) +
+               _bottomLeftJet.CalculateEnergyCost(dt, costFactor);
+    }
+
+    public BrainTransition BuildTransition(float dt)
+    {
+        var currentSensors = LastSensors;
+        var energySpent = CalculateJetEnergyCost(dt);
+        var hunger = 1 - MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
+        var penaltyCoefficient = 1000f;
+        var penalty = (1 - hunger) * penaltyCoefficient * energySpent;
+        var angularPenaltyCoefficient = 800f;
+        var angularPenalty = AngularVelocity * AngularVelocity * angularPenaltyCoefficient * dt;
+
+        var baseReward = Energy - PreviousEnergy - penalty - angularPenalty;
+        var parasiteRewardMultiplier = 20f;
+        var reward = baseReward + parasiteRewardMultiplier * ParasiteEnergyDelta;
+
+        var transition = new BrainTransition
+        {
+            Id = Id,
+            State = PreviousSensors.ToArray(),
+            Action = LastJetForces.ToArray(),
+            Reward = reward,
+            NextState = currentSensors.ToArray(),
+            Done = false
+        };
+
+        PreviousSensors = currentSensors;
+        PreviousEnergy = Energy;
+
+        return transition;
+    }
+
+    private float[] SensorsToArray(Sensors s)
+    {
+        return new float[]
+        {
+            s.PlantNormalizedDistance,
+            s.PlantAngleSin,
+            s.PlantAngleCos,
+            s.CreatureNormalizedDistance,
+            s.CreatureAngleSin,
+            s.CreatureAngleCos,
+            s.Energy
+        };
     }
 }
