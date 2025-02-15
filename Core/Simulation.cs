@@ -100,6 +100,23 @@ public class Simulation
 
         UpdatePlants(dt);
         
+        foreach (var creature in Creatures.Values)
+        {
+            var transition = creature.BuildTransition(dt);
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await Client.TrainBrainAsync(new List<BrainTransition> { transition });
+                }
+                catch (Exception ex)
+                {
+                    // Optionally log the error.
+                    Console.WriteLine($"Error sending training transition for creature {creature.Id}: {ex.Message}");
+                }
+            });
+        }
+        
         CleanupDeadEntities();
     }
 

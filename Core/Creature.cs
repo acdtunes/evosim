@@ -13,6 +13,7 @@ public abstract class Creature
     private readonly Jet _frontLeftJet;
     private readonly Jet _frontRightJet;
     protected readonly Simulation Simulation;
+    private float _smoothedReward = 0;
 
     protected Creature(Vector2 position, float size, float mass, Random random, Simulation simulation,
         Genome? genome = null)
@@ -97,8 +98,11 @@ public abstract class Creature
 
         var reproductionProbability = Simulation.Parameters.Creature.ReproductionProbability;
         if (Energy >= Simulation.Parameters.Creature.ReproductionEnergyThreshold &&
-            _random.NextDouble() < reproductionProbability * dt) Reproduce();
-        if (Energy <= 0) Simulation.KillCreature(this);
+            _random.NextDouble() < reproductionProbability * dt) 
+            Reproduce();
+        
+        // if (Energy <= 0) 
+        //     Simulation.KillCreature(this);
     }
 
     private void UpdateJetForces(float dt, JetForces forces)
@@ -110,10 +114,13 @@ public abstract class Creature
 
     protected virtual void Reproduce()
     {
+        return;
+        var type = GetType();
+        Console.WriteLine($"{type}  reproducing");
         var offspringGenome = Genome.Mutate();
 
         var offspringEnergy = Energy / 2;
-        Energy /= 2;
+        //Energy /= 2;
 
         var offset = new Vector2((float)_random.NextDouble() - 0.5f, (float)_random.NextDouble() - 0.5f) * Size;
         var offspringPosition = Position + offset;
@@ -199,18 +206,28 @@ public abstract class Creature
 
     public BrainTransition BuildTransition(float dt)
     {
-        var currentSensors = LastSensors;
+        var energyChange = Energy - PreviousEnergy;
         var energySpent = CalculateJetEnergyCost(dt);
         var hunger = 1 - MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
-        var penaltyCoefficient = 1000f;
+        var penaltyCoefficient = Simulation.Parameters.Reward.PenaltyCoefficient;
         var penalty = (1 - hunger) * penaltyCoefficient * energySpent;
-        var angularPenaltyCoefficient = 800f;
+        var angularPenaltyCoefficient = Simulation.Parameters.Reward.AngularPenaltyCoefficient;
         var angularPenalty = AngularVelocity * AngularVelocity * angularPenaltyCoefficient * dt;
 
-        var baseReward = Energy - PreviousEnergy - penalty - angularPenalty;
-        var parasiteRewardMultiplier = 20f;
-        var reward = baseReward + parasiteRewardMultiplier * ParasiteEnergyDelta;
+        // Parasite bonus remains.
+        var parasiteRewardMultiplier = Simulation.Parameters.Reward.ParasiteRewardMultiplier;
+        var instantaneousReward = energyChange - penalty - angularPenalty + parasiteRewardMultiplier * ParasiteEnergyDelta;
 
+        // Add a survival bonus per time step to encourage staying alive.
+        var survivalBonus = Simulation.Parameters.Reward.SurvivalBonusPerSecond * dt;
+        instantaneousReward += survivalBonus;
+
+        // Smooth the reward signal using an exponential moving average.
+        var smoothingFactor = Simulation.Parameters.Reward.RewardSmoothingFactor;
+        _smoothedReward = smoothingFactor * _smoothedReward + (1 - smoothingFactor) * instantaneousReward;
+        var reward = _smoothedReward;
+
+        var currentSensors = LastSensors;
         var transition = new BrainTransition
         {
             Id = Id,

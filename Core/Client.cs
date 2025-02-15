@@ -18,6 +18,7 @@ public class BrainTransition
     public bool Done { get; set; }
 }
 
+
 public class BrainClient : IDisposable
 {
     private readonly StreamReader _reader;
@@ -103,6 +104,30 @@ public class BrainClient : IDisposable
             var responseLine = await _reader.ReadLineAsync();
             if (string.IsNullOrEmpty(responseLine))
                 throw new Exception("Received empty response from RL server during brain initialization.");
+        }
+        finally
+        {
+            _requestLock.Release();
+        }
+    }
+
+    public async Task TrainBrainAsync(List<BrainTransition> transitions)
+    {
+        var trainMessage = new
+        {
+            type = "train",
+            training = transitions
+        };
+
+        var json = JsonConvert.SerializeObject(trainMessage);
+
+        await _requestLock.WaitAsync();
+        try
+        {
+            await _writer.WriteLineAsync(json);
+            var responseLine = await _reader.ReadLineAsync();
+            if (string.IsNullOrEmpty(responseLine))
+                throw new Exception("Received empty response from RL server during training.");
         }
         finally
         {

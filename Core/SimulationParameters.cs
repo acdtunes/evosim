@@ -19,6 +19,8 @@ public class SimulationParameters
     public PhysicsParameters Physics { get; set; } = new();
 
     public bool LearningEnabled { get; set; } = true;
+
+    public RewardParameters Reward { get; set; } = new RewardParameters();
 }
 
 public class WorldParameters
@@ -66,4 +68,13 @@ public class PhysicsParameters
     public float JetCooldown { get; set; }
     public float LinearForceScaling { get; set; }
     public float AngularForceScaling { get; set; }
+}
+
+public class RewardParameters
+{
+    public float PenaltyCoefficient { get; set; } = 1000f;
+    public float AngularPenaltyCoefficient { get; set; } = 800f;
+    public float ParasiteRewardMultiplier { get; set; } = 20f;
+    public float SurvivalBonusPerSecond { get; set; } = 0.01f;
+    public float RewardSmoothingFactor { get; set; } = 0.9f;
 }

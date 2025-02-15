@@ -27,7 +27,7 @@ public class ParasiteCreature : Creature
             var collisionDistance = (Size + other.Size) / 2f;
             if (Vector2.Distance(Position, other.Position) < collisionDistance)
             {
-                var drainAmount = 50 * dt;
+                var drainAmount = 100;
                 var actualDrain = Math.Min(other.Energy, drainAmount);
                 if (actualDrain > 0 && Energy < Genome.Fullness * Genome.EnergyStorage)
                 {

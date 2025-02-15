@@ -3,19 +3,17 @@ World:
   WorldWidth: 1200
   WorldHeight: 800
 MutationRate: 0.03
-SimulationSpeed: 1
+SimulationSpeed: 10
 Population:
-  InitialCreatureCount: 20
-  InitialParasiteCount: 20
+  InitialCreatureCount: 200
+  InitialParasiteCount: 200
   InitialPlantClusters: 20
   MaxPlantsPerCluster: 15
   GlobalMaxPlantCount: 500
   InitialPlantClusterRadius: 10.0
 Creature:
-  MovementEnergyCostFactor: 0.005
+  MovementEnergyCostFactor: 0.01
   ReproductionEnergyThreshold: 70
-  DragCoefficient: 0.1
-  AngularDragCoefficient: 0.0
   ReproductionProbability: 0.01
 Plant:
   EnergyGain: 12.0
@@ -24,10 +22,16 @@ Plant:
   SeedDispersalProbability: 0.003
   SeedDispersalRadius: 50.0
 Physics:
-  LinearForceScaling: 30.0
-  AngularForceScaling: 1000.0
-  LinearDragCoefficient: 0.5
-  TorqueDragCoefficient: 50
-  JetCooldown: 0.2
+  LinearForceScaling: 2
+  AngularForceScaling: 2  
+  LinearDragCoefficient: 0.2
+  TorqueDragCoefficient: 10
+  JetCooldown: 2
 Render:
   PlantRenderRadius: 2
+Reward:
+  PenaltyCoefficient: 1000.0
+  AngularPenaltyCoefficient: 800.0
+  ParasiteRewardMultiplier: 20.0
+  SurvivalBonusPerSecond: 0.01
+  RewardSmoothingFactor: 0.9875
