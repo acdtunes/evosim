@@ -8,13 +8,10 @@ namespace EvolutionSim.Core;
 public abstract class Creature
 {
     private readonly Jet _backJet;
-    private readonly Jet _bottomLeftJet;
-    private readonly Jet _bottomRightJet;
-    private readonly Jet _frontJet;
     private readonly PhysicalBody _physical;
     private readonly Random _random;
-    private readonly Jet _topLeftJet;
-    private readonly Jet _topRightJet;
+    private readonly Jet _frontLeftJet;
+    private readonly Jet _frontRightJet;
     protected readonly Simulation Simulation;
 
     protected Creature(Vector2 position, float size, float mass, Random random, Simulation simulation,
@@ -32,12 +29,9 @@ public abstract class Creature
 
         const float turningCostFactor = 50f;
 
-        _frontJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, 1f);
         _backJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, 1f);
-        _topRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
-        _topLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
-        _bottomRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
-        _bottomLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+        _frontRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
+        _frontLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
 
         Task.Run(async () => await InitializeBrain());
         LastSensors = ReadSensors();
@@ -65,10 +59,7 @@ public abstract class Creature
 
     public Sensors LastSensors { get; private set; }
 
-    public JetForces LastJetForces => new(
-        _frontJet.LastForce, _backJet.LastForce,
-        _topRightJet.LastForce, _topLeftJet.LastForce,
-        _bottomRightJet.LastForce, _bottomLeftJet.LastForce);
+    public JetForces LastJetForces => new(_backJet.LastForce, _frontRightJet.LastForce, _frontLeftJet.LastForce);
 
     public Sensors PreviousSensors { get; set; }
     public float PreviousEnergy { get; set; }
@@ -112,12 +103,9 @@ public abstract class Creature
 
     private void UpdateJetForces(float dt, JetForces forces)
     {
-        _frontJet.Update(dt, forces.Front);
-        //_backJet.Update(dt, forces.Back);
-        _topRightJet.Update(dt, forces.TopRight);
-        _topLeftJet.Update(dt, forces.TopLeft);
-        //_bottomRightJet.Update(dt, forces.BottomRight);
-        //_bottomLeftJet.Update(dt, forces.BottomLeft);
+        _backJet.Update(dt, forces.Back);
+        _frontRightJet.Update(dt, forces.FrontRight);
+        _frontLeftJet.Update(dt, forces.FrontLeft);
     }
 
     protected virtual void Reproduce()
@@ -154,51 +142,59 @@ public abstract class Creature
 
     public Sensors ReadSensors()
     {
-        var nearestPlant = Simulation.GetNearestPlant(Position);
-        var plantVisionSensor = VisionSensor.FromTargets(
+        int numCones = 8;
+
+        var plantsInRange = Simulation.GetPlantsInRange(Position, Genome.ForagingRange);
+        var plantPositions = plantsInRange.Select(p => p.Position).ToArray();
+        float[] plantRetina = Retina.FromTargets(
             Position,
             Heading,
             Genome.ForagingRange,
             Simulation.Parameters.World.WorldWidth,
             Simulation.Parameters.World.WorldHeight,
-            nearestPlant?.Position ?? Position
-        );
+            numCones,
+            plantPositions
+        ).Activations;
 
-        var creatureSensor = ReadVisionSensor(c => c.IsParasite);
-
-        var energy = MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
-        
-        LastSensors = new Sensors(plantVisionSensor, creatureSensor, energy);
-        
-        return LastSensors;
-    }
-
-    protected virtual VisionSensor ReadVisionSensor(Func<Creature, bool> predicate)
-    {
-        var targets = Simulation.Creatures.Values
-            .Where(c => c.Id != Id && predicate(c))
+        var nearbyCreatures = Simulation.GetNearbyCreatures(Position, Genome.ForagingRange, Id);
+        var nonParasitePositions = nearbyCreatures
+            .Where(c => !c.IsParasite)
             .Select(c => c.Position)
             .ToArray();
-
-        return VisionSensor.FromTargets(
+        var parasitePositions = nearbyCreatures
+            .Where(c => c.IsParasite)
+            .Select(c => c.Position)
+            .ToArray();
+        float[] nonParasiteRetina = Retina.FromTargets(
             Position,
             Heading,
             Genome.ForagingRange,
             Simulation.Parameters.World.WorldWidth,
             Simulation.Parameters.World.WorldHeight,
-            targets
-        );
+            numCones,
+            nonParasitePositions
+        ).Activations;
+        float[] parasiteRetina = Retina.FromTargets(
+            Position,
+            Heading,
+            Genome.ForagingRange,
+            Simulation.Parameters.World.WorldWidth,
+            Simulation.Parameters.World.WorldHeight,
+            numCones,
+            parasitePositions
+        ).Activations;
+
+        var energy = MathHelper.Clamp(Energy / Genome.EnergyStorage, 0, 1);
+        LastSensors = new Sensors(plantRetina, nonParasiteRetina, parasiteRetina, energy);
+        return LastSensors;
     }
 
     public float CalculateJetEnergyCost(float dt)
     {
         var costFactor = Simulation.Parameters.Creature.MovementEnergyCostFactor;
-        return _frontJet.CalculateEnergyCost(dt, costFactor) +
-               _backJet.CalculateEnergyCost(dt, costFactor) +
-               _topRightJet.CalculateEnergyCost(dt, costFactor) +
-               _topLeftJet.CalculateEnergyCost(dt, costFactor) +
-               _bottomRightJet.CalculateEnergyCost(dt, costFactor) +
-               _bottomLeftJet.CalculateEnergyCost(dt, costFactor);
+        return _backJet.CalculateEnergyCost(dt, costFactor) +
+               _frontRightJet.CalculateEnergyCost(dt, costFactor) +
+               _frontLeftJet.CalculateEnergyCost(dt, costFactor);
     }
 
     public BrainTransition BuildTransition(float dt)

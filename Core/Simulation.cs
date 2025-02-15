@@ -12,11 +12,11 @@ public class Simulation
     private readonly SpatialHashGrid<Creature> _creatureGrid;
     private readonly Dictionary<int, Creature> _deadCreatures;
     private readonly Dictionary<int, Plant> _deadPlants;
-    private readonly object _jetForcesLock = new();
+    private readonly object _forcesLock = new();
 
     private readonly SpatialHashGrid<Plant> _plantGrid;
     private readonly Random _random;
-    private Dictionary<int, JetForces> _jetForces = new();
+    private Dictionary<int, JetForces> _forces = new();
     private int _nextCreatureId;
     private int _nextPlantId;
 
@@ -84,54 +84,39 @@ public class Simulation
         _plantGrid.Rebuild(Plants.Values);
         _creatureGrid.Rebuild(Creatures.Values);
 
-        EvaluateForces();
-
+        SetForces();
+        
         Dictionary<int, JetForces> forcesBatch;
-        lock (_jetForcesLock)
+        lock (_forcesLock)
         {
-            forcesBatch = new Dictionary<int, JetForces>(_jetForces);
+            forcesBatch = new Dictionary<int, JetForces>(_forces);
         }
-
-        var trainingTransitions = new List<BrainTransition>();
-
+        
         foreach (var creature in Creatures.Values.ToList())
         {
-            var forces = forcesBatch.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0, 0, 0, 0);
+            var forces = forcesBatch.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0);
             creature.Update(dt, forces);
-            trainingTransitions.Add(creature.BuildTransition(dt));
         }
 
         UpdatePlants(dt);
-        PlantSpawner.DisperseSeeds(dt);
+        
         CleanupDeadEntities();
-
-        if (Parameters.LearningEnabled)
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await Client.TrainBrainsAsync(trainingTransitions);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Training error: " + ex.Message);
-                }
-            });
     }
 
-    private void EvaluateForces()
+    private void SetForces()
     {
         Task.Run(async () =>
         {
             var sensors = new Dictionary<int, Sensors>();
             foreach (var creature in Creatures.Values)
                 sensors[creature.Id] = creature.ReadSensors();
+            
             try
             {
-                var forces = await Client.EvaluateBrainsAsync(sensors);
-                lock (_jetForcesLock)
+                var forces = await Client.EvaluateSensorsAsync(sensors);
+                lock (_forcesLock)
                 {
-                    _jetForces = forces;
+                    _forces = forces;
                 }
             }
             catch (Exception)
@@ -191,7 +176,8 @@ public class Simulation
             candidates = _plantGrid.Query(position, searchRadius);
         }
 
-        if (candidates.Count == 0) candidates = Plants.Values.ToList();
+        if (candidates.Count == 0) 
+            candidates = Plants.Values.ToList();
 
         return candidates.MinBy(plant =>
             plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight));
@@ -218,7 +204,9 @@ public class Simulation
 
     private void UpdatePlants(float dt)
     {
-        foreach (var plant in Plants.Values.ToList()) plant.Update(dt);
+        PlantSpawner.DisperseSeeds(dt);
+        foreach (var plant in Plants.Values.ToList()) 
+            plant.Update(dt);
     }
 
     private void CleanupDeadEntities()
@@ -238,5 +226,14 @@ public class Simulation
             _random.Next(Parameters.World.WorldWidth),
             _random.Next(Parameters.World.WorldHeight)
         );
+    }
+
+    // New method to retrieve all plants within a given range using the spatial grid.
+    public List<Plant> GetPlantsInRange(Vector2 position, float range)
+    {
+        var candidates = _plantGrid.Query(position, range);
+        return candidates.Where(plant =>
+            plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight) <= range
+        ).ToList();
     }
 }

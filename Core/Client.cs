@@ -35,34 +35,32 @@ public class BrainClient : IDisposable
 
     public void Dispose()
     {
-        _reader?.Dispose();
-        _writer?.Dispose();
-        _tcpClient?.Close();
+        _reader.Dispose();
+        _writer.Dispose();
+        _tcpClient.Close();
     }
 
-    public async Task<Dictionary<int, JetForces>> EvaluateBrainsAsync(Dictionary<int, Sensors> sensorBatch)
+    public async Task<Dictionary<int, JetForces>> EvaluateSensorsAsync(Dictionary<int, Sensors> sensorBatch)
     {
         var sensors = new List<object>();
         foreach (var kvp in sensorBatch)
         {
-            var creatureId = kvp.Key;
+            var id = kvp.Key;
             var s = kvp.Value;
             sensors.Add(new
             {
-                id = creatureId,
-                PlantNormalizedDistance = s.PlantVisionSensor.NormalizedDistance,
-                PlantNormalizedAngleSin = s.PlantVisionSensor.NormalizedAngleSin,
-                PlantNormalizedAngleCos = s.PlantVisionSensor.NormalizedAngleCos,
-                CreatureNormalizedDistance = s.CreatureVisionSensor.NormalizedDistance,
-                CreatureNormalizedAngleSin = s.CreatureVisionSensor.NormalizedAngleSin,
-                CreatureNormalizedAngleCos = s.CreatureVisionSensor.NormalizedAngleCos,
+                id,
+                s.PlantRetina,
+                s.NonParasiteCreatureRetina,
+                s.ParasiteCreatureRetina,
                 s.Energy
             });
         }
 
         var batchMessage = new
         {
-            type = "evaluate", sensors
+            type = "evaluate",
+            sensors
         };
 
         var json = JsonConvert.SerializeObject(batchMessage);
@@ -75,11 +73,11 @@ public class BrainClient : IDisposable
             if (string.IsNullOrEmpty(responseLine))
                 throw new Exception("Received empty response from RL server during evaluation.");
 
-            var responseObj = JsonConvert.DeserializeObject<EvaluationResponse>(responseLine);
-            if (responseObj.results == null)
+            var response = JsonConvert.DeserializeObject<EvaluationResponse>(responseLine);
+            if (response?.Results == null)
                 throw new Exception("Invalid response from server: " + responseLine);
 
-            return responseObj.results;
+            return response.Results;
         }
         finally
         {
@@ -93,7 +91,7 @@ public class BrainClient : IDisposable
         {
             type = "init",
             id = creatureId,
-            brain_weights = brainWeights
+            weights = brainWeights
         };
 
         var json = JsonConvert.SerializeObject(initMessage);
@@ -112,45 +110,11 @@ public class BrainClient : IDisposable
         }
     }
 
-    public async Task TrainBrainsAsync(List<BrainTransition> trainingData)
-    {
-        var batchMessage = new
-        {
-            type = "train",
-            training = trainingData
-        };
-
-        var json = JsonConvert.SerializeObject(batchMessage);
-
-        await _requestLock.WaitAsync();
-        try
-        {
-            await _writer.WriteLineAsync(json);
-            var responseLine = await _reader.ReadLineAsync();
-            if (string.IsNullOrEmpty(responseLine))
-                throw new Exception("Received empty response from RL server during training.");
-
-            var responseObj = JsonConvert.DeserializeObject<TrainResponse>(responseLine);
-            if (responseObj?.info == null)
-                throw new Exception("Invalid response from server: " + responseLine);
-        }
-        finally
-        {
-            _requestLock.Release();
-        }
-    }
-
     private class EvaluationResponse
     {
-        public string status { get; set; }
-        public Dictionary<int, JetForces> results { get; set; }
-        public string error { get; set; }
-    }
+        public string Status { get; set; } = null!;
+        public Dictionary<int, JetForces> Results { get; set; } = new();
 
-    private class TrainResponse
-    {
-        public string status { get; set; }
-        public Dictionary<int, object> info { get; set; }
-        public string error { get; set; }
+        public string Error { get; set; } = string.Empty;
     }
 }

@@ -21,12 +21,13 @@ public class ParasiteCreature : Creature
     public override void Update(float dt, JetForces forces)
     {
         base.Update(dt, forces);
+        
         foreach (var other in Simulation.GetNearbyCreatures<ParasiteCreature>(Position, Size * 1.5f, Id))
         {
             var collisionDistance = (Size + other.Size) / 2f;
             if (Vector2.Distance(Position, other.Position) < collisionDistance)
             {
-                var drainAmount = 20 * dt;
+                var drainAmount = 50 * dt;
                 var actualDrain = Math.Min(other.Energy, drainAmount);
                 if (actualDrain > 0 && Energy < Genome.Fullness * Genome.EnergyStorage)
                 {
@@ -39,15 +40,4 @@ public class ParasiteCreature : Creature
         }
     }
 
-    protected override VisionSensor ReadVisionSensor(Func<Creature, bool> predicate)
-    {
-        var worldWidth = Simulation.Parameters.World.WorldWidth;
-        var worldHeight = Simulation.Parameters.World.WorldHeight;
-        var targets = Simulation.Creatures.Values
-            .Where(c => c.Id != Id && predicate(c))
-            .Select(c => c.Position);
-        
-        return VisionSensor.FromTargets(Position, Heading, Genome.ForagingRange, worldWidth,
-            worldHeight, targets.ToArray());
-    }
 }

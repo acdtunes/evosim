@@ -95,58 +95,34 @@ public class PhysicalBody
         if (backThrust > 0f)
             _backJetCooldownTimer = _jetCooldown;
 
-        var frontThrust = forces.Front >= minActivation && _frontJetCooldownTimer <= 0f
-            ? forces.Front * _linearForceScaling * 100
-            : 0f;
-        if (frontThrust > 0f)
-            _frontJetCooldownTimer = _jetCooldown;
-
-        var netThrust = backThrust - frontThrust;
+        var netThrust = backThrust;
 
         var torqueScaling = _torqueForceScaling;
-        var topRightForce = forces.TopRight >= minActivation && _topRightJetCooldownTimer <= 0f
-            ? forces.TopRight * torqueScaling
+        var topRightForce = forces.FrontRight >= minActivation && _topRightJetCooldownTimer <= 0f
+            ? forces.FrontRight * torqueScaling
             : 0f;
         if (topRightForce > 0f)
             _topRightJetCooldownTimer = _jetCooldown;
 
-        var topLeftForce = forces.TopLeft >= minActivation && _topLeftJetCooldownTimer <= 0f
-            ? forces.TopLeft * torqueScaling
+        var topLeftForce = forces.FrontLeft >= minActivation && _topLeftJetCooldownTimer <= 0f
+            ? forces.FrontLeft * torqueScaling
             : 0f;
         if (topLeftForce > 0f)
             _topLeftJetCooldownTimer = _jetCooldown;
-
-        var bottomRightForce = forces.BottomRight >= minActivation && _bottomRightJetCooldownTimer <= 0f
-            ? forces.BottomRight * torqueScaling
-            : 0f;
-        if (bottomRightForce > 0f)
-            _bottomRightJetCooldownTimer = _jetCooldown;
-
-        var bottomLeftForce = forces.BottomLeft >= minActivation && _bottomLeftJetCooldownTimer <= 0f
-            ? forces.BottomLeft * torqueScaling
-            : 0f;
-        if (bottomLeftForce > 0f)
-            _bottomLeftJetCooldownTimer = _jetCooldown;
 
         var halfWidth = _size / 2f;
         var halfHeight = _size / 2f;
 
         var topRightPos = new Vector2(halfWidth, -halfHeight);
         var topLeftPos = new Vector2(-halfWidth, -halfHeight);
-        var bottomRightPos = new Vector2(halfWidth, halfHeight);
-        var bottomLeftPos = new Vector2(-halfWidth, halfHeight);
 
         var forceTopRight = GetPerpendicularForce(topRightPos, topRightForce);
         var forceTopLeft = GetPerpendicularForce(topLeftPos, topLeftForce);
-        var forceBottomRight = GetPerpendicularForce(bottomRightPos, bottomRightForce);
-        var forceBottomLeft = GetPerpendicularForce(bottomLeftPos, bottomLeftForce);
 
         var torqueTopRight = topRightPos.Cross(forceTopRight);
         var torqueTopLeft = -topLeftPos.Cross(forceTopLeft);
-        var torqueBottomRight = -bottomRightPos.Cross(forceBottomRight);
-        var torqueBottomLeft = bottomLeftPos.Cross(forceBottomLeft);
 
-        var netTorque = torqueTopRight + torqueTopLeft + torqueBottomRight + torqueBottomLeft;
+        var netTorque = torqueTopRight + torqueTopLeft;
 
         _inputTorque += netTorque;
         _inputThrust += netThrust;

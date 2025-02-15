@@ -119,23 +119,63 @@ public class Game1 : Game
 
         if (_selectedCreature != null)
         {
+            var plantRetinaStr = string.Join(", ", _selectedCreature.LastSensors.PlantRetina.Select(v => v.ToString("F2")));
+
+            // ----- Modified printing for Creature Retinas (Non-Parasite and Parasite) -----
+            int coneCount = 8;
+            // Non-Parasite Retina
+            int totalNonParasiteValues = _selectedCreature.LastSensors.NonParasiteCreatureRetina.Length;
+            int numNonParasites = totalNonParasiteValues / coneCount;
+            string nonParasiteRetinaOutput;
+            if (numNonParasites > 1)
+            {
+                nonParasiteRetinaOutput = "";
+                for (int i = 0; i < numNonParasites; i++)
+                {
+                    var retinaSlice = _selectedCreature.LastSensors.NonParasiteCreatureRetina
+                        .Skip(i * coneCount)
+                        .Take(coneCount)
+                        .Select(val => val.ToString("F2"));
+                    nonParasiteRetinaOutput += $"Non-Parasite Retina {i + 1}: [" + string.Join(", ", retinaSlice) + "]\n";
+                }
+            }
+            else
+            {
+                nonParasiteRetinaOutput = string.Join(", ", _selectedCreature.LastSensors.NonParasiteCreatureRetina.Select(v => v.ToString("F2")));
+            }
+
+            // Parasite Retina
+            int totalParasiteValues = _selectedCreature.LastSensors.ParasiteCreatureRetina.Length;
+            int numParasites = totalParasiteValues / coneCount;
+            string parasiteRetinaOutput;
+            if (numParasites > 1)
+            {
+                parasiteRetinaOutput = "";
+                for (int i = 0; i < numParasites; i++)
+                {
+                    var retinaSlice = _selectedCreature.LastSensors.ParasiteCreatureRetina
+                        .Skip(i * coneCount)
+                        .Take(coneCount)
+                        .Select(val => val.ToString("F2"));
+                    parasiteRetinaOutput += $"Parasite Retina {i + 1}: [" + string.Join(", ", retinaSlice) + "]\n";
+                }
+            }
+            else
+            {
+                parasiteRetinaOutput = string.Join(", ", _selectedCreature.LastSensors.ParasiteCreatureRetina.Select(v => v.ToString("F2")));
+            }
+
             var stats = $"Position: {_selectedCreature.Position}\n" +
                         $"Energy: {_selectedCreature.Energy:F2}\n" +
                         $"Sensors:\n" +
-                        $"  PlantNorm: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedDistance:F2}, " +
-                        $"PlantSin: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedAngleSin:F2}, " +
-                        $"PlantCos: {_selectedCreature.LastSensors.PlantVisionSensor.NormalizedAngleCos:F2}\n" +
-                        $"  CreatureNorm: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedDistance:F2}, " +
-                        $"CreatureSin: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedAngleSin:F2}, " +
-                        $"CreatureCos: {_selectedCreature.LastSensors.CreatureVisionSensor.NormalizedAngleCos:F2}\n" +
                         $"  Energy: {_selectedCreature.LastSensors.Energy:F2}\n" +
+                        $"  Plant Retina: [{plantRetinaStr}]\n" +
+                        $"  Non-Parasite Creature Retina:\n{nonParasiteRetinaOutput}\n" +
+                        $"  Parasite Creature Retina:\n{parasiteRetinaOutput}\n" +
                         $"JetForces:\n" +
-                        $"  Front: {_selectedCreature.LastJetForces.Front:F2}, " +
-                        $"Back: {_selectedCreature.LastJetForces.Back:F2}\n" +
-                        $"  TopRight: {_selectedCreature.LastJetForces.TopRight:F2}, " +
-                        $"TopLeft: {_selectedCreature.LastJetForces.TopLeft:F2}\n" +
-                        $"  BottomRight: {_selectedCreature.LastJetForces.BottomRight:F2}, " +
-                        $"BottomLeft: {_selectedCreature.LastJetForces.BottomLeft:F2}";
+                        $"  Back: {_selectedCreature.LastJetForces.Back:F2}\n" +
+                        $"  FrontRight: {_selectedCreature.LastJetForces.FrontRight:F2}\n" +
+                        $"  FrontLeft: {_selectedCreature.LastJetForces.FrontLeft:F2}\n";
 
             Console.Clear();
             Console.WriteLine(stats);
