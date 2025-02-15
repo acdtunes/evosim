@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using EvolutionSim.Configuration;
 using EvolutionSim.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -7,7 +8,7 @@ using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using Color = Microsoft.Xna.Framework.Color;
 
-namespace EvolutionSim;
+namespace EvolutionSim.UI;
 
 public class Game1 : Game
 {

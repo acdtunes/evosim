@@ -1,12 +1,24 @@
-namespace EvolutionSim.Core;
+using MessagePack;
 
-public record JetForces(
-    float Back,
-    float FrontRight,
-    float FrontLeft)
+namespace EvolutionSim.Core
 {
-    public float[] ToArray()
+    [MessagePackObject(keyAsPropertyName: true)]
+    public class JetForces
     {
-        return [Back, FrontRight, FrontLeft];
+        public JetForces(float back, float frontRight, float frontLeft)
+        {
+            Back = back;
+            FrontRight = frontRight;
+            FrontLeft = frontLeft;
+        }
+
+        public float Back { get; set; }
+        public float FrontRight { get; set; }
+        public float FrontLeft { get; set; }
+
+        public float[] ToArray()
+        {
+            return new[] { Back, FrontRight, FrontLeft };
+        }
     }
 }

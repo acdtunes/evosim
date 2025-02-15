@@ -1,4 +1,4 @@
-namespace EvolutionSim.Core;
+namespace EvolutionSim.Configuration;
 
 public class SimulationParameters
 {

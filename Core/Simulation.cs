@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using EvolutionSim.Configuration;
 using Microsoft.Xna.Framework;
 
 namespace EvolutionSim.Core;
@@ -48,6 +49,7 @@ public class Simulation
             Parameters.World.WorldHeight);
 
         PopulateCreatures();
+        InitializeBrains();
     }
 
     public BrainClient Client { get; init; }
@@ -65,7 +67,6 @@ public class Simulation
             var position = GetRandomVector2();
             var creature = new SimpleCreature(position, 15f, 5f, _random, this);
             Creatures.Add(creature.Id, creature);
-            Task.Run(async () => await Client.InitBrainAsync(creature.Id, creature.Genome.BrainWeights));
         }
 
         for (var i = 0; i < Parameters.Population.InitialParasiteCount; i++)
@@ -73,7 +74,6 @@ public class Simulation
             var position = GetRandomVector2();
             var parasite = new ParasiteCreature(position, _random, this);
             Creatures.Add(parasite.Id, parasite);
-            Task.Run(async () => await Client.InitBrainAsync(parasite.Id, parasite.Genome.BrainWeights));
         }
     }
 
@@ -86,38 +86,28 @@ public class Simulation
 
         SetForces();
         
-        Dictionary<int, JetForces> forcesBatch;
-        lock (_forcesLock)
-        {
-            forcesBatch = new Dictionary<int, JetForces>(_forces);
-        }
-        
-        foreach (var creature in Creatures.Values.ToList())
-        {
-            var forces = forcesBatch.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0);
-            creature.Update(dt, forces);
-        }
+        TrainCreatures(dt);
 
         UpdatePlants(dt);
         
-        foreach (var creature in Creatures.Values)
-        {
-            var transition = creature.BuildTransition(dt);
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await Client.TrainBrainAsync(new List<BrainTransition> { transition });
-                }
-                catch (Exception ex)
-                {
-                    // Optionally log the error.
-                    Console.WriteLine($"Error sending training transition for creature {creature.Id}: {ex.Message}");
-                }
-            });
-        }
-        
         CleanupDeadEntities();
+    }
+
+    private void TrainCreatures(float dt)
+    {
+        List<BrainTransition> transitions = new List<BrainTransition>();
+        foreach (var creature in Creatures.Values.ToList())
+        {
+            var forces = _forces.TryGetValue(creature.Id, out var f) ? f : new JetForces(0, 0, 0);
+            creature.Update(dt, forces);
+            var transition = creature.BuildTransition(dt);
+            transitions.Add(transition);
+        }
+
+        if (transitions.Count > 0)
+        {
+            _ = Client.TrainAsync(transitions);
+        }
     }
 
     private void SetForces()
@@ -136,9 +126,9 @@ public class Simulation
                     _forces = forces;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // ignored
+                Console.WriteLine("Error evaluating sensors: " + ex.Message);
             }
         });
     }
@@ -179,25 +169,6 @@ public class Simulation
     public int GetNextPlantId()
     {
         return _nextPlantId++;
-    }
-
-    public Plant? GetNearestPlant(Vector2 position)
-    {
-        var searchRadius = GridCellSize;
-        var candidates = _plantGrid.Query(position, searchRadius);
-
-        while (candidates.Count == 0 &&
-               searchRadius < Math.Max(Parameters.World.WorldWidth, Parameters.World.WorldHeight))
-        {
-            searchRadius *= 2;
-            candidates = _plantGrid.Query(position, searchRadius);
-        }
-
-        if (candidates.Count == 0) 
-            candidates = Plants.Values.ToList();
-
-        return candidates.MinBy(plant =>
-            plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight));
     }
 
     public List<Creature> GetNearbyCreatures<T>(Vector2 position, float radius, int excludeId = -1)
@@ -245,12 +216,30 @@ public class Simulation
         );
     }
 
-    // New method to retrieve all plants within a given range using the spatial grid.
     public List<Plant> GetPlantsInRange(Vector2 position, float range)
     {
         var candidates = _plantGrid.Query(position, range);
         return candidates.Where(plant =>
             plant.Position.TorusDistance(position, Parameters.World.WorldWidth, Parameters.World.WorldHeight) <= range
         ).ToList();
+    }
+
+    private void InitializeBrains()
+    {
+        Task.Run(async () =>
+        {
+            var brainWeights = Creatures.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Genome.BrainWeights
+            );
+            try
+            {
+                await Client.InitBrainsAsync(brainWeights);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error initializing brains: " + ex.Message);
+            }
+        });
     }
 }

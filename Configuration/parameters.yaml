@@ -5,8 +5,8 @@ World:
 MutationRate: 0.03
 SimulationSpeed: 10
 Population:
-  InitialCreatureCount: 200
-  InitialParasiteCount: 200
+  InitialCreatureCount: 10
+  InitialParasiteCount: 10
   InitialPlantClusters: 20
   MaxPlantsPerCluster: 15
   GlobalMaxPlantCount: 500

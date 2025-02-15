@@ -1,5 +1,5 @@
 import socket
-import json
+import msgpack
 import threading
 import torch
 import torch.nn as nn
@@ -137,25 +137,10 @@ def set_actor_weights_from_flat_list(actor, flat_list):
         param.data.copy_(flat_tensor[pointer:pointer+numel].view_as(param))
         pointer += numel
 
-# -------------------------------
-# Process a received JSON command.
-# -------------------------------
+
 def process_command(request):
     command_type = request.get("type")
-    print(f"Request size: {len(json.dumps(request))}")
-    if command_type == "init":
-        creature_id = request.get("id")
-        flat_weights = request.get("weights")
-        if creature_id is None or flat_weights is None:
-            return {"Error": "Missing 'id' or 'weights' field"}
-        try:
-            brain = Brain()
-            set_actor_weights_from_flat_list(brain.actor, flat_weights)
-            brains[int(creature_id)] = brain
-            return {"Status": "ok", "Message": f"Initialized brain for creature {creature_id}"}
-        except Exception as e:
-            return {"Error": f"Failed to initialize brain: {str(e)}"}
-    elif command_type == "evaluate":
+    if command_type == "evaluate":
         sensors_batch = request.get("sensors")
         if sensors_batch is None:
             return {"Error": "Missing 'sensors' field in evaluate command."}
@@ -164,17 +149,13 @@ def process_command(request):
             creature_id = sensor.get("id")
             if creature_id is None:
                 continue
-            # Construct the input state vector.
             try:
-                # Example: combine sensor fields into a vector.
-                # Adjust the list below to match your actual sensor configuration.
                 plant_retina = sensor["PlantRetina"]
                 non_parasite_retina = sensor["NonParasiteCreatureRetina"]
                 parasite_retina = sensor["ParasiteCreatureRetina"]
                 energy = sensor["Energy"]
                 combined_creature_retina = non_parasite_retina + parasite_retina
                 sensor_values = plant_retina + combined_creature_retina + [energy]
-                # Ensure the state vector is of length STATE_DIM.
                 if len(sensor_values) != STATE_DIM:
                     print(f"Invalid sensor vector length for creature {creature_id}")
                     continue
@@ -195,7 +176,6 @@ def process_command(request):
             }
         return {"Status": "ok", "Results": results}
     elif command_type == "train":
-        # The train command includes a batch of transitions for one or more creatures.
         training_batch = request.get("training", [])
         train_info = {}
         for item in training_batch:
@@ -209,58 +189,85 @@ def process_command(request):
             if state is None or action is None or reward is None or next_state is None:
                 continue
             brain.replay_buffer.push(state, action, reward, next_state, done)
-            info = []
             for _ in range(5):
-                update_info = brain.train_step()
-                if update_info is not None:
-                    info.append(update_info)
-            train_info[creature_id] = info
-        return {"Status": "ok", "Info": train_info}
+                brain.train_step()
+        return {"Status": "ok"}
+    elif command_type == "init":
+        brains_list = request.get("brains")
+        if brains_list is None:
+            return {"Error": "Missing 'brains' field for init_batch command."}
+        results = {}
+        for brain_spec in brains_list:
+            creature_id = brain_spec.get("id")
+            flat_weights = brain_spec.get("weights")
+            if creature_id is None or flat_weights is None:
+                # Record an error for this entry. Using "unknown" if id is missing.
+                results[creature_id if creature_id is not None else "unknown"] = "Missing 'id' or 'weights'"
+            else:
+                try:
+                    brain = Brain()
+                    set_actor_weights_from_flat_list(brain.actor, flat_weights)
+                    brains[int(creature_id)] = brain
+                except Exception as e:
+                     return {"Status": "error", "Error": str(e)}
+        return {"Status": "ok"}
     else:
-        return {"Error": f"Unknown command type: {command_type}"}
-
-# -------------------------------
-# Helper function to send a response over the connection.
-# -------------------------------
-def send_response(conn, response):
-    conn.sendall((json.dumps(response) + "\n").encode('utf-8'))
+        return {"Status": "error", "Error": f"Unknown command type: {command_type}"}
 
 # -------------------------------
 # Main server loop.
 # -------------------------------
+def recvall(conn, n):
+    data = bytearray()
+    while len(data) < n:
+        try:
+            packet = conn.recv(n - len(data))
+        except ConnectionResetError as e:
+            print("Connection reset by peer in recvall:", e)
+            return None
+        if not packet:
+            return None
+        data.extend(packet)
+    return bytes(data)
+
 def run_server(host="localhost", port=5000):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, port))
-        s.listen(1)  # Listen for a single connection.
+        s.listen(1)
         print(f"Server listening on {host}:{port}")
         while True:
             conn, addr = s.accept()
             print(f"Connected by {addr}")
             with conn:
-                buffer = ""
                 while True:
+                    # Read the 4-byte length prefix.
+                    length_bytes = recvall(conn, 4)
+                    if not length_bytes:
+                        break
+                    message_length = int.from_bytes(length_bytes, byteorder='little')
+
+                    # Read the complete MessagePack message.
+                    msg_bytes = recvall(conn, message_length)
+                    if not msg_bytes:
+                        break
+
                     try:
-                        data = conn.recv(4096)
-                    except ConnectionResetError as cre:
-                        print("Connection reset by peer, closing connection.")
-                        break  # Gracefully exit the connection loop.
+                        request = msgpack.unpackb(msg_bytes, raw=False)
+                    except Exception as e:
+                        print("Error unpacking message:", e)
+                        break
 
-                    if not data:
-                        break  # Client disconnected.
-
-                    buffer += data.decode("utf-8")
-                    # Process messages terminated by newline.
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        if not line.strip():
-                            continue
-                        try:
-                            request = json.loads(line)
-                            response = process_command(request)
-                        except Exception as e:
-                            response = {"Error": str(e)}
-                        response_line = json.dumps(response) + "\n"
-                        conn.sendall(response_line.encode("utf-8"))
+                    try:
+                        response = process_command(request)
+                    except Exception as e:
+                        response = {"Error": str(e)}
+                    try:
+                        response_bytes = msgpack.packb(response, use_bin_type=True)
+                        response_length = len(response_bytes).to_bytes(4, byteorder='little')
+                        conn.sendall(response_length + response_bytes)
+                    except Exception as e:
+                        print("Error sending response:", e)
+                        break
             print("Client disconnected.")
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using MessagePack;
 
 namespace EvolutionSim.Core;
 
@@ -21,23 +22,19 @@ public class BrainTransition
 
 public class BrainClient : IDisposable
 {
-    private readonly StreamReader _reader;
+    private readonly NetworkStream _stream;
     private readonly SemaphoreSlim _requestLock = new(1, 1);
     private readonly TcpClient _tcpClient;
-    private readonly StreamWriter _writer;
 
     public BrainClient(string host, int port)
     {
         _tcpClient = new TcpClient(host, port);
-        var stream = _tcpClient.GetStream();
-        _reader = new StreamReader(stream);
-        _writer = new StreamWriter(stream) { AutoFlush = true };
+        _stream = _tcpClient.GetStream();
     }
 
     public void Dispose()
     {
-        _reader.Dispose();
-        _writer.Dispose();
+        _stream.Dispose();
         _tcpClient.Close();
     }
 
@@ -47,14 +44,13 @@ public class BrainClient : IDisposable
         foreach (var kvp in sensorBatch)
         {
             var id = kvp.Key;
-            var s = kvp.Value;
             sensors.Add(new
             {
                 id,
-                s.PlantRetina,
-                s.NonParasiteCreatureRetina,
-                s.ParasiteCreatureRetina,
-                s.Energy
+                kvp.Value.PlantRetina,
+                kvp.Value.NonParasiteCreatureRetina,
+                kvp.Value.ParasiteCreatureRetina,
+                kvp.Value.Energy
             });
         }
 
@@ -64,20 +60,14 @@ public class BrainClient : IDisposable
             sensors
         };
 
-        var json = JsonConvert.SerializeObject(batchMessage);
-
         await _requestLock.WaitAsync();
         try
         {
-            await _writer.WriteLineAsync(json);
-            var responseLine = await _reader.ReadLineAsync();
-            if (string.IsNullOrEmpty(responseLine))
-                throw new Exception("Received empty response from RL server during evaluation.");
-
-            var response = JsonConvert.DeserializeObject<EvaluationResponse>(responseLine);
-            if (response?.Results == null)
-                throw new Exception("Invalid response from server: " + responseLine);
-
+            await WriteMessageAsync(batchMessage);
+            var response = await ReadMessageAsync<Response>();
+            if (response.Status != "ok")
+                throw new Exception("Invalid response from server.");
+            
             return response.Results;
         }
         finally
@@ -86,24 +76,22 @@ public class BrainClient : IDisposable
         }
     }
 
-    public async Task InitBrainAsync(int creatureId, float[] brainWeights)
+
+    public async Task InitBrainsAsync(Dictionary<int, float[]> brainWeights)
     {
-        var initMessage = new
+        var initBatchMessage = new
         {
             type = "init",
-            id = creatureId,
-            weights = brainWeights
+            brains = brainWeights.Select(kvp => new { Id = kvp.Key, Weights = kvp.Value })
         };
-
-        var json = JsonConvert.SerializeObject(initMessage);
 
         await _requestLock.WaitAsync();
         try
         {
-            await _writer.WriteLineAsync(json);
-            var responseLine = await _reader.ReadLineAsync();
-            if (string.IsNullOrEmpty(responseLine))
-                throw new Exception("Received empty response from RL server during brain initialization.");
+            await WriteMessageAsync(initBatchMessage);
+            var response = await ReadMessageAsync<Response>();
+            if (!response.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+                throw new Exception("Batch initialization failed: " + response.Error);
         }
         finally
         {
@@ -111,23 +99,28 @@ public class BrainClient : IDisposable
         }
     }
 
-    public async Task TrainBrainAsync(List<BrainTransition> transitions)
+    public async Task TrainAsync(List<BrainTransition> transitions)
     {
-        var trainMessage = new
+        var trainingBatchMessage = new
         {
             type = "train",
-            training = transitions
+            training = transitions.Select(t => new {
+                id = t.Id,
+                state = t.State,
+                action = t.Action,
+                reward = t.Reward,
+                next_state = t.NextState,
+                done = t.Done
+            }).ToList()
         };
-
-        var json = JsonConvert.SerializeObject(trainMessage);
 
         await _requestLock.WaitAsync();
         try
         {
-            await _writer.WriteLineAsync(json);
-            var responseLine = await _reader.ReadLineAsync();
-            if (string.IsNullOrEmpty(responseLine))
-                throw new Exception("Received empty response from RL server during training.");
+            await WriteMessageAsync(trainingBatchMessage);
+            var response = await ReadMessageAsync<Response>();
+            if (!response.Status.Equals("ok", StringComparison.OrdinalIgnoreCase))
+                throw new Exception("Training failed: " + response.Error);
         }
         finally
         {
@@ -135,11 +128,42 @@ public class BrainClient : IDisposable
         }
     }
 
-    private class EvaluationResponse
+    private async Task WriteMessageAsync<T>(T message)
+    {
+        byte[] bytes = MessagePackSerializer.Serialize(message, MessagePack.Resolvers.ContractlessStandardResolver.Options);
+        byte[] lengthBytes = BitConverter.GetBytes(bytes.Length);
+        await _stream.WriteAsync(lengthBytes, 0, lengthBytes.Length);
+        await _stream.WriteAsync(bytes, 0, bytes.Length);
+    }
+
+    private async Task<T> ReadMessageAsync<T>()
+    {
+        byte[] lengthBytes = new byte[4];
+        int read = await _stream.ReadAsync(lengthBytes, 0, lengthBytes.Length);
+        if (read < 4)
+        {
+            throw new Exception("Failed to read the full message length.");
+        }
+        int messageLength = BitConverter.ToInt32(lengthBytes, 0);
+        byte[] messageBytes = new byte[messageLength];
+        int offset = 0;
+        while (offset < messageLength)
+        {
+            int r = await _stream.ReadAsync(messageBytes, offset, messageLength - offset);
+            if (r == 0)
+            {
+                throw new Exception("Connection closed while waiting for a complete message.");
+            }
+            offset += r;
+        }
+        return MessagePackSerializer.Deserialize<T>(messageBytes, MessagePack.Resolvers.ContractlessStandardResolver.Options);
+    }
+
+    [MessagePackObject(keyAsPropertyName: true)]
+    public class Response
     {
         public string Status { get; set; } = null!;
         public Dictionary<int, JetForces> Results { get; set; } = new();
-
         public string Error { get; set; } = string.Empty;
     }
 }

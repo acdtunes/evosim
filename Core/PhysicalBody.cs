@@ -1,4 +1,5 @@
 using System;
+using EvolutionSim.Configuration;
 using Microsoft.Xna.Framework;
 
 namespace EvolutionSim.Core;

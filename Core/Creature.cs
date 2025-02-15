@@ -34,7 +34,6 @@ public abstract class Creature
         _frontRightJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
         _frontLeftJet = new Jet(random, simulation.Parameters.Physics.JetCooldown, turningCostFactor);
 
-        Task.Run(async () => await InitializeBrain());
         LastSensors = ReadSensors();
         PreviousSensors = LastSensors;
         PreviousEnergy = Energy;
@@ -64,18 +63,6 @@ public abstract class Creature
 
     public Sensors PreviousSensors { get; set; }
     public float PreviousEnergy { get; set; }
-
-    private async Task InitializeBrain()
-    {
-        try
-        {
-            await Simulation.Client.InitBrainAsync(Id, Genome.BrainWeights);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Error initializing brain for creature " + Id + ": " + ex.Message);
-        }
-    }
 
     public virtual void Update(float dt, JetForces forces)
     {
@@ -116,7 +103,6 @@ public abstract class Creature
     {
         return;
         var type = GetType();
-        Console.WriteLine($"{type}  reproducing");
         var offspringGenome = Genome.Mutate();
 
         var offspringEnergy = Energy / 2;
@@ -132,8 +118,6 @@ public abstract class Creature
             offspring = new SimpleCreature(offspringPosition, Size, Mass, _random, Simulation, offspringGenome);
         offspring.Energy = offspringEnergy;
         Simulation.AddCreature(offspring);
-
-        Task.Run(async () => await offspring.InitializeBrain());
     }
 
     private void CheckForPlantCollision()
@@ -233,7 +217,7 @@ public abstract class Creature
             Id = Id,
             State = PreviousSensors.ToArray(),
             Action = LastJetForces.ToArray(),
-            Reward = reward,
+            Reward = energyChange,
             NextState = currentSensors.ToArray(),
             Done = false
         };

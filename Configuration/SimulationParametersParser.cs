@@ -1,8 +1,7 @@
 using System.IO;
-using EvolutionSim.Core;
 using YamlDotNet.Serialization;
 
-namespace EvolutionSim;
+namespace EvolutionSim.Configuration;
 
 public static class SimulationConfigParser
 {
